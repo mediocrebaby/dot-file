@@ -15,23 +15,28 @@ local config = wezterm.config_builder() -- 配置构建器
 config.font = wezterm.font_with_fallback({
 	"FiraCode Nerd Font Mono",
 })
-config.font_size = 12
+config.font_size = 14
 
----窗口大小---
-config.initial_rows = 30
-config.initial_cols = 100
+-- 中等窗口大小
+config.initial_cols = 120
+config.initial_rows = 35
 
----Windows: 窗口位置---
+-- 窗口创建时设置居中位置
 wezterm.on("gui-startup", function(cmd)
+	local screen = wezterm.gui.screens().active
 	local tab, pane, window = wezterm.mux.spawn_window(cmd or {})
-	window:gui_window():set_position(1100, 505) -- 设置 x=100, y=50
+
+	-- 等待窗口完全创建后获取实际尺寸
+	local gui_win = window:gui_window()
+	local dimensions = gui_win:get_dimensions()
+
+	-- 使用实际窗口尺寸计算居中位置
+	local x = (screen.width - dimensions.pixel_width) / 2 + screen.x
+	local y = (screen.height - dimensions.pixel_height) / 2 + screen.y
+
+	gui_win:set_position(x, y)
 end)
 
----MacOS: 窗口位置---
--- wezterm.on("gui-startup", function(cmd)
--- 	local tab, pane, window = wezterm.mux.spawn_window(cmd or {})
--- 	window:gui_window():set_position(1500, 700) -- 设置 x=100, y=50
--- end)
 
 --- 主题和性能配置 ---
 config.color_scheme = "Ayu Mirage"
