@@ -21,6 +21,13 @@ config.font_size = 12
 config.initial_rows = 30
 config.initial_cols = 100
 
+---窗口位置---
+wezterm.on("gui-startup", function(cmd)
+	local tab, pane, window = wezterm.mux.spawn_window(cmd or {})
+	window:gui_window():set_position(1100, 505) -- 设置 x=100, y=50
+end)
+
+
 --- 主题和性能配置 ---
 config.color_scheme = "Ayu Mirage"
 config.max_fps = 60
