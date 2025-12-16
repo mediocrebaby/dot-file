@@ -137,8 +137,26 @@ config.keys = {
 	{ key = "F11", mods = "NONE", action = wezterm.action.ToggleFullScreen },
 	-- Leader + m:隐藏窗口
 	{ key = "m", mods = "LEADER", action = wezterm.action.Hide },
-	-- Leader + n:新建标签页
-	{ key = "n", mods = "LEADER", action = wezterm.action.SpawnTab("CurrentPaneDomain") },
+	-- Leader + n:新建窗口
+	{
+		key = "n",
+		mods = "LEADER",
+		action = wezterm.action_callback(function(window, pane)
+			local screen = wezterm.gui.screens().active
+			local dimensions = window:get_dimensions()
+
+			local x = (screen.width - dimensions.pixel_width) / 2 + screen.x
+			local y = (screen.height - dimensions.pixel_height) / 2 + screen.y
+
+			wezterm.mux.spawn_window({
+				position = {
+					x = x,
+					y = y,
+					origin = "ActiveScreen",
+				},
+			})
+		end),
+	},
 	-- Leader + w:关闭当前标签页(不确认)
 	{ key = "w", mods = "LEADER", action = wezterm.action.CloseCurrentTab({ confirm = false }) },
 	-- Leader + Tab:切换到下一个标签页
@@ -208,12 +226,40 @@ config.mouse_bindings = {
 }
 
 ---高级功能---
-config.enable_scroll_bar = true
+config.enable_scroll_bar = false
 config.scrollback_lines = 20000
 config.automatically_reload_config = true
 config.exit_behavior = "CloseOnCleanExit"
 config.exit_behavior_messaging = "Verbose"
 config.status_update_interval = 50000
+
+---窗口图片设置---
+config.background = {
+	-- 背景图片层
+	{
+		source = {
+			File = "", -- 图片路径
+		},
+		-- 图片透明度 (0.0 - 1.0，值越小越透明)
+		opacity = 0.9,
+		hsb = {
+			brightness = 0.2, -- 亮度，降低可让文字更清晰
+			saturation = 1.0, -- 饱和度
+			hue = 1.0, -- 色调
+		},
+	},
+}
+
+-- 文字透明度/颜色调整
+config.foreground_text_hsb = {
+	hue = 1.0,
+	saturation = 1.0,
+	brightness = 1.5, -- 增加文字亮度，提高可读性
+}
+
+config.text_background_opacity = 0.4
+
+
 
 ---超链接处理规则---
 -- config.hyperlink_rules = {
