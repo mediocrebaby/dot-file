@@ -1,0 +1,37 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "small_model": "anthropic/claude-haiku-4-5",
+  "autoupdate": true,
+  "provider": {
+    "anthropic": {
+      "options": {
+        "baseURL": "https://co.yes.vg/v1"
+      }
+    },
+    "openai": {
+      "options": {
+        "baseURL": "https://co.yes.vg/v1"
+      },
+      "models": {
+        "gpt-5.2": {
+          "options": {
+            "store": false
+          }
+        },
+        "gpt-5.2-codex": {
+          "options": {
+            "store": false
+          }
+        }
+      }
+    },
+    "google": {
+      "options": {
+        "baseURL": "https://co.yes.vg/gemini/v1beta"
+      }
+    }
+  },
+  "plugin": [
+    "oh-my-opencode@2.14.0"
+  ]
+}
