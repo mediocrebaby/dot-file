@@ -77,7 +77,7 @@ else
 end
 
 --- 窗口样式 ---
-config.window_decorations = "INTEGRATED_BUTTONS|RESIZE"
+config.window_decorations = "RESIZE"
 config.window_frame = {
 	active_titlebar_bg = "#090909",
 	inactive_titlebar_bg = "#090909",
@@ -89,22 +89,161 @@ config.adjust_window_size_when_changing_font_size = false
 config.window_close_confirmation = "NeverPrompt"
 
 --- 标签栏与配色 ---
-config.enable_tab_bar = false
-config.show_new_tab_button_in_tab_bar = true
-config.show_tab_index_in_tab_bar = true
+config.enable_tab_bar = true
+config.show_new_tab_button_in_tab_bar = false
+config.show_tab_index_in_tab_bar = false
 config.switch_to_last_active_tab_when_closing_tab = true
 config.tab_max_width = 25
-config.use_fancy_tab_bar = true
+config.use_fancy_tab_bar = false
 config.colors = {
 	scrollbar_thumb = "#242936",
 	tab_bar = {
-		active_tab = { bg_color = "#090909", fg_color = "#ff6565" },
-		inactive_tab = { bg_color = "#090909", fg_color = "#95e6cb" },
-		inactive_tab_hover = { bg_color = "#0f1419", fg_color = "#95e6cb" },
-		new_tab = { bg_color = "#090909", fg_color = "#95e6cb" },
-		new_tab_hover = { bg_color = "#42a5f5", fg_color = "#ffffff" },
+		background = "rgba(0,0,0,0)",
 	},
 }
+
+--- Cells 工具类 (用于构建格式化文本) ---
+local Cells = {}
+Cells.__index = Cells
+
+function Cells:new()
+	return setmetatable({ segments = {} }, self)
+end
+
+function Cells:add_segment(segment_id, text, color, attributes)
+	color = color or {}
+	local items = {}
+	if color.bg then
+		table.insert(items, { Background = { Color = color.bg } })
+	end
+	if color.fg then
+		table.insert(items, { Foreground = { Color = color.fg } })
+	end
+	if attributes and #attributes > 0 then
+		for _, attr in ipairs(attributes) do
+			table.insert(items, attr)
+		end
+	end
+	table.insert(items, { Text = text })
+	table.insert(items, "ResetAttributes")
+	self.segments[segment_id] = {
+		items = items,
+		has_bg = color.bg ~= nil,
+		has_fg = color.fg ~= nil,
+	}
+	return self
+end
+
+function Cells:update_segment_text(segment_id, text)
+	local idx = #self.segments[segment_id].items - 1
+	self.segments[segment_id].items[idx] = { Text = text }
+	return self
+end
+
+function Cells:update_segment_colors(segment_id, color)
+	local has_bg = self.segments[segment_id].has_bg
+	local has_fg = self.segments[segment_id].has_fg
+	if color.bg and has_bg then
+		self.segments[segment_id].items[1] = { Background = { Color = color.bg } }
+	end
+	if color.fg then
+		local fg_idx = has_bg and 2 or 1
+		if has_fg then
+			self.segments[segment_id].items[fg_idx] = { Foreground = { Color = color.fg } }
+		end
+	end
+	return self
+end
+
+function Cells:render(ids)
+	local cells = {}
+	for _, id in ipairs(ids) do
+		for _, item in pairs(self.segments[id].items) do
+			table.insert(cells, item)
+		end
+	end
+	return cells
+end
+
+--- 自定义标签页样式 (圆角药丸形状) ---
+local nf = wezterm.nerdfonts
+local GLYPH_SCIRCLE_LEFT = nf.ple_left_half_circle_thick --
+local GLYPH_SCIRCLE_RIGHT = nf.ple_right_half_circle_thick --
+local GLYPH_CIRCLE = nf.fa_circle --
+local GLYPH_ADMIN = nf.md_shield_half_full -- 󰞀
+local GLYPH_LINUX = nf.cod_terminal_linux --
+
+local TAB_TITLE_INSET = 4
+
+local tab_title_colors = {
+	text_default = { bg = "#61637E", fg = "#1C1B19" },
+	text_hover = { bg = "#517EAB", fg = "#1C1B19" },
+	text_active = { bg = "#74C7EC", fg = "#11111B" },
+	scircle_default = { bg = "rgba(0, 0, 0, 0)", fg = "#45475A" },
+	scircle_hover = { bg = "rgba(0, 0, 0, 0)", fg = "#3A5A7A" },
+	scircle_active = { bg = "rgba(0, 0, 0, 0)", fg = "#5795B1" },
+}
+
+local function clean_process_name(proc)
+	local a = string.gsub(proc, "(.*[/\\])(.*)", "%2")
+	return a:gsub("%.exe$", "")
+end
+
+local function create_tab_title(process_name, base_title, max_width, inset)
+	local title
+	if process_name:len() > 0 then
+		title = process_name
+	else
+		title = base_title
+	end
+	-- 计算可用宽度
+	local available_width = max_width - inset
+	if title:len() > available_width then
+		title = title:sub(1, available_width)
+	end
+	return title
+end
+
+wezterm.on("format-tab-title", function(tab, tabs, panes, config_obj, hover, max_width)
+	local process_name = clean_process_name(tab.active_pane.foreground_process_name)
+	local is_wsl = process_name:match("^wsl") ~= nil
+	local is_admin = (tab.active_pane.title:match("^Administrator: ") or tab.active_pane.title:match("(Admin)")) ~= nil
+	local inset = (is_admin or is_wsl) and 6 or TAB_TITLE_INSET
+	local title = create_tab_title(process_name, tab.active_pane.title, max_width, inset)
+
+	local tab_state = "default"
+	if tab.is_active then
+		tab_state = "active"
+	elseif hover then
+		tab_state = "hover"
+	end
+
+	local cells = Cells:new()
+	cells
+		:add_segment("scircle_left", GLYPH_SCIRCLE_LEFT, tab_title_colors["scircle_" .. tab_state])
+		:add_segment("admin", " " .. GLYPH_ADMIN, tab_title_colors["text_" .. tab_state])
+		:add_segment("wsl", " " .. GLYPH_LINUX, tab_title_colors["text_" .. tab_state])
+		:add_segment(
+			"title",
+			" " .. title,
+			tab_title_colors["text_" .. tab_state],
+			{ { Attribute = { Intensity = "Bold" } } }
+		)
+		:add_segment("padding", " ", tab_title_colors["text_" .. tab_state])
+		:add_segment("scircle_right", GLYPH_SCIRCLE_RIGHT, tab_title_colors["scircle_" .. tab_state])
+
+	local render_order
+	if is_admin then
+		render_order = { "scircle_left", "admin", "title", "padding", "scircle_right" }
+	elseif is_wsl then
+		render_order = { "scircle_left", "wsl", "title", "padding", "scircle_right" }
+	else
+		render_order = { "scircle_left", "title", "padding", "scircle_right" }
+	end
+
+	return cells:render(render_order)
+end)
+
 
 --- 键位设计 ---
 config.disable_default_key_bindings = true
@@ -461,9 +600,7 @@ config.background = {
 config.foreground_text_hsb = {
 	hue = 1.0,
 	saturation = 1.0,
-	brightness = 1.5, -- 增加文字亮度，提高可读性
+	brightness = 1.0, -- 增加文字亮度，提高可读性
 }
-
-config.text_background_opacity = 0.4
 
 return config
