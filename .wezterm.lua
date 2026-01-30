@@ -552,18 +552,61 @@ wezterm.on("command_palette_spawn_local", function(window, pane)
 	spawn_tab_in_domain_with_cwd(window, pane, "local")
 end)
 
+local VS_DEV_SHELL_PATH =
+	"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"
+
+local function spawn_vs_tab(window, pane, arch)
+	local cwd = get_current_dir_for_domain(pane, "local")
+	-- Map "x64" to "amd64" for the PowerShell script; "x86" works as is.
+	local ps_arch = (arch == "x64") and "amd64" or arch
+
+	-- Construct the command to execute Launch-VsDevShell.ps1
+	-- We use -NoExit so the shell stays open.
+	local command = string.format("& '%s' -Arch %s  -SkipAutomaticLocation", VS_DEV_SHELL_PATH, ps_arch)
+
+	window:perform_action(
+		wezterm.action.SpawnCommandInNewTab({
+			domain = { DomainName = "local" },
+			cwd = cwd,
+			args = { "pwsh", "-NoLogo", "-NoExit", "-Command", command },
+		}),
+		pane
+	)
+end
+
+wezterm.on("command_palette_spawn_vs_x64", function(window, pane)
+	spawn_vs_tab(window, pane, "x64")
+end)
+
+wezterm.on("command_palette_spawn_vs_x86", function(window, pane)
+	spawn_vs_tab(window, pane, "x86")
+end)
+
 wezterm.on("augment-command-palette", function(window, pane)
 	return {
 		{
 			brief = "New tab: WSL Ubuntu  (current cwd)",
 			action = wezterm.action.EmitEvent("command_palette_spawn_wsl_ubuntu"),
+			icon = "cod_terminal_ubuntu",
 		},
 		{
 			brief = "New tab: local (current cwd)",
 			action = wezterm.action.EmitEvent("command_palette_spawn_local"),
+			icon = "cod_terminal_powershell",
+		},
+		{
+			brief = "New tab: Visual Studio 2022 (x64)",
+			action = wezterm.action.EmitEvent("command_palette_spawn_vs_x64"),
+			icon = "dev_visualstudio",
+		},
+		{
+			brief = "New tab: Visual Studio 2022 (x86)",
+			action = wezterm.action.EmitEvent("command_palette_spawn_vs_x86"),
+			icon = "dev_visualstudio",
 		},
 	}
 end)
+
 
 ---高级功能---
 config.enable_scroll_bar = false
