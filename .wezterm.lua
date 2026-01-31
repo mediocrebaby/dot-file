@@ -191,18 +191,26 @@ end
 
 local function create_tab_title(process_name, base_title, max_width, inset)
 	local title
-	if process_name:len() > 0 then
-		title = process_name
-	else
-		title = base_title
-	end
+	title = base_title
 	-- 计算可用宽度
 	local available_width = max_width - inset
-	if title:len() > available_width then
-		title = title:sub(1, available_width)
+
+	-- 使用 wezterm.column_width 正确计算显示宽度（支持中文等全角字符）
+	if wezterm.column_width(title) > available_width then
+		-- 逐字符截断，确保不超过可用宽度
+		local truncated = ""
+		for _, char in utf8.codes(title) do
+			local next_str = truncated .. utf8.char(char)
+			if wezterm.column_width(next_str) > available_width then
+				break
+			end
+			truncated = next_str
+		end
+		title = truncated
 	end
 	return title
 end
+
 
 wezterm.on("format-tab-title", function(tab, tabs, panes, config_obj, hover, max_width)
 	local process_name = clean_process_name(tab.active_pane.foreground_process_name)
