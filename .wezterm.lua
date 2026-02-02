@@ -192,6 +192,12 @@ end
 local function create_tab_title(process_name, base_title, max_width, inset)
 	local title
 	title = base_title
+
+	-- 如果 title 为空字符串，使用 process_name
+	if not title or title == "" then
+		title = process_name
+	end
+	
 	-- 计算可用宽度
 	local available_width = max_width - inset
 
