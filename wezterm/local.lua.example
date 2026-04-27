@@ -1,0 +1,15 @@
+-- 本机覆盖配置模板
+--
+-- 用法：
+--   1. 复制本文件为 wezterm/local.lua（已被 .gitignore，不入仓）
+--   2. 按本机情况修改下面的字段；保留 nil 即沿用默认
+--   3. 重启 WezTerm 或 Ctrl+Shift+R 重新加载
+--
+-- 已支持的覆盖字段：
+--   font_size  — 字号（数字）；nil 用 wezterm 默认值（12.0）
+--   wsl_distro — wezterm domains 里的 WSL distro 名；nil 用 "Ubuntu-22.04"
+
+return {
+	font_size = nil,
+	wsl_distro = nil,
+}

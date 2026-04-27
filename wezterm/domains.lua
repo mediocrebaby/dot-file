@@ -1,8 +1,9 @@
 local wezterm = require('wezterm')
 local M = {}
 local platform = require('utils.platform')
+local local_config = require('utils.local_config')
 
-local WSL_DISTRO = "Ubuntu-22.04"
+local WSL_DISTRO = local_config.wsl_distro or "Ubuntu-22.04"
 
 local VS_DEV_SHELL_PATH =
 	"C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\Common7\\Tools\\Launch-VsDevShell.ps1"

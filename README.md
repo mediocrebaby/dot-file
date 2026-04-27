@@ -133,6 +133,29 @@ mklink /D "%USERPROFILE%\.config\wezterm" "%USERPROFILE%\Code\dot-file\wezterm"
 
 重启 WezTerm 或按 `Ctrl+Shift+R` 重新加载配置。
 
+### 4. 本机覆盖（每台设备独有的设置）
+
+字号、WSL distro 这种"每台机器最优值不一样"的字段，通过 `wezterm/local.lua` 覆盖。该文件已被 `.gitignore`，不会同步到其他设备。
+
+```bash
+# macOS / Linux
+cp ~/Documents/Code/dot-file/wezterm/local.lua.example ~/Documents/Code/dot-file/wezterm/local.lua
+
+# Windows (PowerShell)
+Copy-Item $env:USERPROFILE\Code\dot-file\wezterm\local.lua.example $env:USERPROFILE\Code\dot-file\wezterm\local.lua
+```
+
+打开 `wezterm/local.lua` 按本机情况填写：
+
+```lua
+return {
+    font_size  = 14.0,             -- 字号；nil 用默认
+    wsl_distro = "Ubuntu-24.04",   -- WSL distro 名；nil 用 "Ubuntu-22.04"
+}
+```
+
+未来想新增可覆盖字段：在对应模块（如 `appearance.lua`）里 `require('utils.local_config')` 后读取即可，无需改加载机制。
+
 ## Claude Code 配置要点
 
 本仓库目前只维护 `claude/skills/` 一个目录——不再附带 `CLAUDE.md`、`agents/`、`hooks/`、`scripts/` 这些 OMC（oh-my-claudecode）框架产物，所有自动化交给 Claude Code 原生 skill 机制按描述触发。

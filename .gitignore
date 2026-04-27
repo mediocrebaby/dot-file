@@ -31,6 +31,9 @@ claude/.credentials.json
 # Lua 编译产物
 *.luac
 
+# WezTerm 本机覆盖配置（每台设备独有）
+wezterm/local.lua
+
 # CodeStable产物
 CodeStable/
 AGENTS.md
