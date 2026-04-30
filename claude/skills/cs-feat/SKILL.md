@@ -103,6 +103,15 @@ codestable/features/{feature}/
 
 ---
 
+
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec
+
+---
+
 ## 相关文档
 
 - `codestable/reference/system-overview.md` — CodeStable 体系总览

@@ -138,3 +138,11 @@ libdoc 产物**不在 `codestable/` 下**——API 参考是面向外部读者�
 - libdoc 和 guidedoc 内容高度重叠——其中一份定位有误
 - `manifest.yaml` 直接删行——改 `status: skipped` 并写 note
 - 源码接口不存在却在文档写了——以源码为事实源不编造
+
+---
+
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec

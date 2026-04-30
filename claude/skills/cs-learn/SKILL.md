@@ -116,3 +116,11 @@ python codestable/tools/search-yaml.py --dir codestable/compound --filter doc_ty
 
 1. **不混入 spec**——learning 不放进 `features/` 或 `issues/`；spec 也不放进 `compound/`
 2. **只认自己的 doc_type**——只读写 `doc_type: learning`
+
+---
+
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec

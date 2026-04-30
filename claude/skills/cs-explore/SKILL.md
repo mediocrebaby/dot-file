@@ -131,3 +131,11 @@ python codestable/tools/search-yaml.py --dir codestable/compound --filter doc_ty
 - 直接给处方没证据链——每条结论必须回溯到 file:line
 - 历史 explore 已过期却继续引用，不做 `status` 标注
 - 读写非 `doc_type=explore` 的文档——本技能只负责 explore
+
+---
+
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec

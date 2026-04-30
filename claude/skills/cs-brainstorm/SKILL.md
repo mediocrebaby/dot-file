@@ -184,6 +184,15 @@ frontmatter 字段口径跟 design / acceptance 共用一组，看 `shared-conve
 
 ---
 
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec
+
+---
+
+
 ## 硬性边界
 
 1. **不跳过分诊**——任何长度的讨论开始前都要先判 case

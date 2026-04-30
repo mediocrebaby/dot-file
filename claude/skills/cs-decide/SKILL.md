@@ -117,3 +117,11 @@ python codestable/tools/search-yaml.py --dir codestable/compound --filter doc_ty
 4. **不主动修改 AGENTS.md 和 ARCHITECTURE.md**——Phase 5 只提示，由用户决定
 5. **跨技能一致性**——decision 和 AGENTS.md 描述不同时以 decision 为详细版、AGENTS.md 为摘要版，两者应链接不应矛盾
 6. **只认自己的 doc_type**——只读写 `doc_type: decision`
+
+---
+
+## 交互模式
+
+当需要用户做决策、澄清歧义、或在多个实现路径间选择时，
+必须使用 AskUserQuestion 工具呈现选项，而不是用纯文本提问。
+单选 2-4 个选项，多选场景用 multiSelec
