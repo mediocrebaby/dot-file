@@ -1,0 +1,8 @@
+[mgr]
+show_hidden = true
+
+[opener]
+edit = [
+  { run = "nvim %s",  desc = "Neovim",   for = "unix", block = true},
+  { run = "nvim %s",  desc = "Neovim",   for = "windows", block = true}
+]
