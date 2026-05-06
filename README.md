@@ -1,6 +1,6 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code** 与 **WezTerm** 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **Claude Code**、**WezTerm** 与 **Yazi** 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
@@ -23,6 +23,8 @@ dot-file/
 │   ├── domains.lua       # SSH / Unix / WSL 域
 │   ├── events.lua        # 自定义事件回调
 │   └── advanced.lua      # 其他高级选项
+├── yazi/                 # Yazi 文件管理器配置
+│   └── yazi.toml         # 主配置（显示隐藏文件、用 Neovim 打开）
 ├── .gitignore            # 忽略 macOS、编辑器、日志与 Claude 本地状态
 └── README.md
 ```
@@ -156,6 +158,43 @@ return {
 
 未来想新增可覆盖字段：在对应模块（如 `appearance.lua`）里 `require('utils.local_config')` 后读取即可，无需改加载机制。
 
+### 5. 链接 Yazi 配置
+
+Yazi 是一个用 Rust 写的高性能终端文件管理器，本仓库在 `yazi/` 下维护其配置（目前包含 `yazi.toml`，未来可加 `keymap.toml`、`theme.toml`、`init.lua` 等）。
+
+#### macOS / Linux
+
+Yazi 默认在 `~/.config/yazi/` 查找配置：
+
+```bash
+mkdir -p ~/.config
+[ -e ~/.config/yazi ] && mv ~/.config/yazi ~/.config/yazi.backup.$(date +%s)
+ln -s ~/Documents/Code/dot-file/yazi ~/.config/yazi
+```
+
+#### Windows
+
+Yazi 在 Windows 下使用 `%APPDATA%\yazi\config\`：
+
+PowerShell（管理员）：
+
+```powershell
+$src = "$env:USERPROFILE\Code\dot-file\yazi"
+$dst = "$env:APPDATA\yazi\config"
+New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
+if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
+New-Item -ItemType SymbolicLink -Path $dst -Target $src
+```
+
+CMD（管理员）：
+
+```cmd
+mkdir "%APPDATA%\yazi"
+mklink /D "%APPDATA%\yazi\config" "%USERPROFILE%\Code\dot-file\yazi"
+```
+
+下次启动 `yazi` 即可加载配置；也可以执行 `yazi --help` 确认安装就绪。
+
 ## Claude Code 配置要点
 
 本仓库目前只维护 `claude/skills/` 一个目录——不再附带 `CLAUDE.md`、`agents/`、`hooks/`、`scripts/` 这些 OMC（oh-my-claudecode）框架产物，所有自动化交给 Claude Code 原生 skill 机制按描述触发。
@@ -210,6 +249,35 @@ return {
 
 模块化设计使得自定义很容易：改外观编辑 `appearance.lua`，改字体改 `font.lua`，改快捷键改 `keybindings.lua`，无需触碰入口 `wezterm.lua`。
 
+## Yazi 使用速查
+
+当前 `yazi/yazi.toml` 仅做两项最小化覆盖：
+
+- `[mgr] show_hidden = true`：默认显示以 `.` 开头的隐藏文件 / 目录。
+- `[opener] edit`：在 macOS / Linux / Windows 上统一用 Neovim 打开文本文件（`block = true` 表示阻塞 Yazi 直到编辑器退出）。
+
+启动方式：在 WezTerm 或任意终端里输入 `yazi`（也常被 alias 成 `y`）。如果想用 Yazi 的「在退出时切换 shell 工作目录」特性，把官方文档里的 `y()` shell 函数加到 `~/.zshrc` / `~/.bashrc` / PowerShell `$PROFILE` 即可。
+
+常用按键（Yazi 内置默认值，不在本仓库覆盖）：
+
+| 按键 | 功能 |
+| --- | --- |
+| `h` / `j` / `k` / `l` | 父目录 / 下移 / 上移 / 进入目录或预览 |
+| `Space` | 选中 / 取消选中当前条目 |
+| `v` | 进入 visual 选择模式 |
+| `Enter` | 用默认 opener 打开（文本文件即触发上面的 `nvim`） |
+| `o` / `O` | 选择 opener / 用第一个 opener 打开 |
+| `y` / `x` / `p` / `P` | 复制 / 剪切 / 粘贴 / 强制粘贴 |
+| `d` / `D` | 移到回收站 / 永久删除 |
+| `a` / `r` | 新建文件或目录 / 重命名 |
+| `f` / `s` | 按文件名过滤 / 内容搜索（依赖 `fd` + `rg`） |
+| `g g` / `G` | 跳到首 / 末 |
+| `;` | 执行 shell 命令 |
+| `:` | 进入命令行 |
+| `q` / `Q` | 退出（带 / 不带 cwd 同步） |
+
+如需自定义键位，把 `keymap.toml` 放进 `yazi/` 目录，软链生效；想要更高质量的预览体验，建议同时安装 `ffmpegthumbnailer`、`poppler`、`imagemagick`、`7z` 等可选依赖（详见 Yazi 官方文档）。
+
 ## 更新与回滚
 
 ```bash
@@ -228,7 +296,7 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code 与 WezTerm 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、WezTerm 与 Yazi 生效，无需重新安装。
 
 ## 注意事项
 
