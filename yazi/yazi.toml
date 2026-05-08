@@ -8,6 +8,9 @@ edit = [
 ]
 
 [open]
-append_rule = [
-  { url = "*.md", use = "edit"}
+prepend_rules = [
+  { url = "*.{toml, cpp, h}", use = "edit"},
+]
+append_rules = [
+  { url = "*.md", use = "edit"},
 ]
