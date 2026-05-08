@@ -6,3 +6,8 @@ edit = [
   { run = "nvim %s",  desc = "Neovim",   for = "unix", block = true},
   { run = "nvim %s",  desc = "Neovim",   for = "windows", block = true}
 ]
+
+[open]
+append_rule = [
+  { url = "*.md", use = "edit"}
+]
