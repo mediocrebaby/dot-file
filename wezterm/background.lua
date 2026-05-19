@@ -10,7 +10,7 @@ function M.apply(config)
 	config.background = {
 		{
 			source = {
-				File = wezterm.home_dir .. "/.config/wezterm/back.jpg",
+				File = wezterm.home_dir .. "/.config/wezterm/Weeby.png",
 			},
 			opacity = 0.9,
 			hsb = {
@@ -19,7 +19,6 @@ function M.apply(config)
 				hue = 1.0,
 			},
       repeat_x = "Repeat",
-      horizontal_offset="-20cell"
 		},
 	}
 
