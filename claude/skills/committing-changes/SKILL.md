@@ -1,6 +1,6 @@
 ---
-name: commit
-description: 该技能用于提交git仓库中未提交的改动，当用户提出“提交代码”，“提交修改内容”时触发。
+name: committing-changes
+description: 通过分析git仓库，提交git仓库中未提交的改动，当用户要求提交git仓库中的改动时使用。
 ---
 
 
@@ -26,6 +26,6 @@ description: 该技能用于提交git仓库中未提交的改动，当用户提�
 ## 不能做
 
 ❌ git log 查看提交日志
-❌ 提交信息中携带了 主体(body) 和 页脚（Footr) 
+❌ 提交中携带 主体(body) 和 页脚（Footr)信息。
 
 
