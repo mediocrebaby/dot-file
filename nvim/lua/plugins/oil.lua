@@ -10,7 +10,7 @@ return {
 
   {
     "stevearc/oil.nvim",
-    dependencies = { "echasnovski/mini.icons" },
+    dependencies = { "nvim-mini/mini.icons" },
     -- oil 需要在启动时接管 netrw，不能懒加载
     lazy = false,
     ---@module "oil"
