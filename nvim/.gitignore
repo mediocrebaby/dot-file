@@ -1,0 +1,10 @@
+# Neovim 运行期生成物
+spell/
+tags
+*.swp
+*.swo
+*~
+
+# 日志 / 调试
+*.log
+debug
