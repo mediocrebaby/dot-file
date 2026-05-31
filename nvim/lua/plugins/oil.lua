@@ -49,17 +49,17 @@ return {
       {
         "<leader>e",
         function()
-          require("oil").open(vim.fn.getcwd())
+          require("oil").open()
         end,
-        desc = "Explorer oil (cwd)",
+        desc = "Explorer oil (file dir)",
       },
       -- 在当前窗口打开当前文件所在目录
       {
         "<leader>E",
         function()
-          require("oil").open()
+          require("oil").open(vim.fn.getcwd())
         end,
-        desc = "Explorer oil (file dir)",
+        desc = "Explorer oil (cwd)",
       },
     },
   },
