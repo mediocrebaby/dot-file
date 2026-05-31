@@ -26,6 +26,12 @@ function M.is_linux()
   return vim.fn.has("unix") == 1 and not M.is_macos()
 end
 
+-- 系统 PATH 中是否存在某个可执行命令
+-- 用于按依赖条件加载插件（如 dotnet 缺失时跳过 C# 扩展）
+function M.has_executable(name)
+  return vim.fn.executable(name) == 1
+end
+
 -- 是否运行在 WSL（Windows Subsystem for Linux）内
 -- 通过 /proc 内核标识判断：WSL 的内核版本字符串中含有 microsoft / WSL 字样
 function M.is_wsl()
