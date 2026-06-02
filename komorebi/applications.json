@@ -1,0 +1,188 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/master/schema.asc.json",
+  "Calculator": {
+    "ignore": [
+      {
+        "kind": "Title",
+        "id": "Calculator",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Clash Verge": {
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "Clash Verge.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "GitHub Credential Manager": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "git-credential-manager.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Google Chrome": {
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "chrome.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "IDA": {
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "ida.exe",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Exe",
+        "id": "ida64.exe",
+        "matching_strategy": "Equals"
+      }
+    ],
+    "floating": [
+      [
+        {
+          "kind": "Exe",
+          "id": "ida.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "IDA -",
+          "matching_strategy": "DoesNotStartWith"
+        },
+        {
+          "kind": "Title",
+          "id": "IDA v",
+          "matching_strategy": "DoesNotStartWith"
+        }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "ida64.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "IDA -",
+          "matching_strategy": "DoesNotStartWith"
+        },
+        {
+          "kind": "Title",
+          "id": "IDA v",
+          "matching_strategy": "DoesNotStartWith"
+        }
+      ]
+    ]
+  },
+  "komorebi-gui": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "komorebi-gui.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "uTools": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "uTools.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "ChatWise":{
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "ChatWise.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "virtual-drilling-host":{
+    "ignore": [
+      {
+        "kind": "Title",
+        "id": "创建设备",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Title",
+        "id": "删除确认",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "DingTalk":{
+    "manage": [
+      [
+        {
+          "kind": "Exe",
+          "id": "DingTalk.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "钉钉",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "wireshark":{
+    "ignore": [
+      {
+        "kind": "Title",
+        "id": "Unsaved packets",
+        "matching_strategy": "Contains"
+      }
+    ]
+  },
+  "word":{
+    "manage": [
+      [
+        {
+          "kind":"Exe",
+          "id": "WINWORD.EXE",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "OpusApp",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "Typora":{
+    "ignore": [
+      [
+        {
+          "kind":"Exe",
+          "id": "Typora.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "License Info",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  }
+}
+
