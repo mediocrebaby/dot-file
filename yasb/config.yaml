@@ -34,8 +34,8 @@ bars:
         "komorebi_workspaces",
         "taskbar",
       ]
-      center: [        
-        "active_window"
+      center: [
+        "komorebi_stack"
       ]
       right: [
         "systray",
@@ -86,6 +86,17 @@ widgets:
       hide_empty_workspaces: false
       hide_if_offline: false
       animation: true
+  komorebi_stack:
+    type: "komorebi.stack.StackWidget"
+    options:
+      show_icons: "always"
+      icon_size: 14
+      label_window: ""          # 只显示图标，不显示名称
+      label_window_active: ""   # 只显示图标，不显示名称
+      label_no_window: ""       # 无窗口聚焦时留空
+      label_offline: "(´-ω-`)"  # komorebi 离线时显示打盹颜文字
+      hide_if_offline: false
+      show_only_stack: false    # 完全常驻：单窗口也显示其图标
   notifications:
     type: "yasb.notifications.NotificationsWidget"
     options:
