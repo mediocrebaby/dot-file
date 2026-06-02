@@ -115,5 +115,14 @@
         "matching_strategy": "Equals"
       }
     ]
+  },
+  "lulu":{
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "LuLu警告",
+        "matching_strategy": "Equals"
+      }
+    ]
   }
 }
