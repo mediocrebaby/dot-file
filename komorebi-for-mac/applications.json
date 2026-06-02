@@ -97,5 +97,23 @@
         "matching_strategy": "Equals"
       }
     ]
+  },
+  "控制中心":{
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "控制中心",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "iCost":{
+    "tabbed": [
+      {
+        "kind": "Exe",
+        "id": "iCost",
+        "matching_strategy": "Equals"
+      }
+    ]
   }
 }
