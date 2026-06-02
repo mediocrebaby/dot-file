@@ -17,6 +17,7 @@
 *.log
 *.tmp
 *.bak
+*.log.*
 
 # Claude Code 本地状态（勿提交个人数据）
 claude/settings.local.json
