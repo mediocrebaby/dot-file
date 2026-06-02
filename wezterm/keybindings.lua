@@ -82,7 +82,7 @@ function M.apply(config)
 	for i = 1, 9 do
 		table.insert(config.keys, {
 			key = tostring(i),
-			mods = "ALT",
+			mods = mod_key,
 			action = wezterm.action.ActivateTab(i - 1),
 		})
 	end
