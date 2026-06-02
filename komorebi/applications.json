@@ -183,6 +183,24 @@
         }
       ]
     ]
+  },
+  "wegame":{
+    "ignore":[
+      {
+        "kind": "Class",
+        "id": "TWINCONTROL",
+        "matching_strategy": "Legacy"
+      }
+    ]
+  },
+  "NRSKIN":{
+    "ignore":[
+      {
+        "kind":"Title",
+        "id": "^[A-Za-z0-9]{11}",
+        "matching_strategy":"Regex"
+      }
+    ]
   }
 }
 
