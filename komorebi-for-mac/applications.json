@@ -1,0 +1,101 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi-for-mac/master/schema.asc.json",
+  "Finder": {
+    "tabbed": [
+      {
+        "kind": "Exe",
+        "id": "Finder",
+        "matching_strategy": "Equals"
+      }
+    ],
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "Finder",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "Info",
+          "matching_strategy": "EndsWith"
+        }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "Finder",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "Copy",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "Installer": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "Installer",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Notification Center": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "Notification Center",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Photos": {
+    "titleless": [
+      {
+        "kind": "Exe",
+        "id": "Photos",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "System Information": {
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "System Information",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Little Componets":{
+    "ignore": [
+      {
+        "kind":"Exe",
+        "id": "通知中心",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "uTools":{
+    "ignore":[
+      {
+        "kind": "Exe",
+        "id": "uTools",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "系统设置":{
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "系统设置",
+        "matching_strategy": "Equals"
+      }
+    ]
+  }
+}
