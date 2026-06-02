@@ -1,6 +1,6 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code**、**Neovim**、**WezTerm**、**Yazi**，以及 Windows 平铺窗口管理三件套 **komorebi**、**whkd**、**yasb** 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **Claude Code**、**Neovim**、**WezTerm**、**Yazi**，以及跨平台平铺窗口管理 —— Windows 用三件套 **komorebi**、**whkd**、**yasb**，macOS 用 **komorebi-for-mac** + **skhd** —— 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
@@ -45,6 +45,11 @@ dot-file/
 ├── yasb/                 # yasb 状态栏配置（仅 Windows）
 │   ├── config.yaml       # 状态栏布局与组件
 │   └── styles.css        # 状态栏样式
+├── komorebi-for-mac/     # komorebi-for-mac 平铺窗口管理器配置（仅 macOS）
+│   ├── komorebi.json     # 主配置（Grid 布局、工作区、应用规则路径）
+│   └── applications.json # 应用特定规则（忽略系统应用、Finder/Photos 等定制）
+├── skhd/                 # skhd 热键守护进程配置（仅 macOS）
+│   └── .skhdrc           # 快捷键绑定（alt 系列，驱动 komorebic）
 ├── .gitignore            # 忽略 macOS、编辑器、日志与 Claude 本地状态
 └── README.md
 ```
@@ -291,6 +296,31 @@ mklink /D "%USERPROFILE%\.config\yasb" "\path\to\dot-file\yasb"
 
 `config.yaml` 中已开启 `watch_config` / `watch_stylesheet`，保存后状态栏会自动重载。
 
+### 10. 链接 komorebi-for-mac 配置（仅 macOS）
+
+> komorebi-for-mac 是 komorebi 在 macOS 上的移植，配合 **skhd**（提供驱动 `komorebic` 的全局快捷键）构成 macOS 下的平铺窗管方案，与 Windows 的 komorebi / whkd / yasb 一一对应。两者仅在 macOS 下可用，需配合使用。
+
+komorebi-for-mac 从 `~/.config/komorebi/` 读取 `komorebi.json` 与 `applications.json`（后者路径已在 `komorebi.json` 中写死为 `$HOME/.config/komorebi/applications.json`）。本仓库的 `komorebi-for-mac/` 目录恰好包含这两个文件，因此直接将整个目录链接到 `~/.config/komorebi`（注意链接目标名为 `komorebi`，而非 `komorebi-for-mac`）：
+
+```bash
+mkdir -p ~/.config
+[ -e ~/.config/komorebi ] && mv ~/.config/komorebi ~/.config/komorebi.backup.$(date +%s)
+ln -s /path/to/dot-file/komorebi-for-mac ~/.config/komorebi
+```
+
+修改配置后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
+
+### 11. 链接 skhd 配置（仅 macOS）
+
+skhd 默认从用户主目录读取 `~/.skhdrc`。本仓库的配置文件位于 `skhd/.skhdrc`，对该单个文件创建符号链接：
+
+```bash
+[ -e ~/.skhdrc ] && mv ~/.skhdrc ~/.skhdrc.backup.$(date +%s)
+ln -s /path/to/dot-file/skhd/.skhdrc ~/.skhdrc
+```
+
+skhd 会监听配置文件变化并自动重载，保存 `.skhdrc` 后快捷键即时生效。
+
 ## 更新与回滚
 
 ```bash
@@ -309,5 +339,5 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi 以及 komorebi、whkd、yasb 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd 生效，无需重新安装。
 
