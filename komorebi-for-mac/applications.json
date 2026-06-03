@@ -119,8 +119,17 @@
   "lulu":{
     "ignore": [
       {
-        "kind": "Exe",
+        "kind": "Title",
         "id": "LuLu警告",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "Microsoft AutoUpdate":{
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "Microsoft AutoUpdate",
         "matching_strategy": "Equals"
       }
     ]
