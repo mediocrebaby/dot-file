@@ -1,0 +1,28 @@
+#!/usr/bin/env lua
+
+-- SbarLua 引导入口
+-- sketchybar 启动时执行本文件;它加载 sketchybar.so 绑定并构建整个状态栏。
+
+local home = os.getenv("HOME")
+
+-- 1) 让 require 能找到 SbarLua 的 C 绑定
+package.cpath = package.cpath .. ";" .. home .. "/.local/share/sketchybar_lua/?.so"
+
+-- 2) 让 require 能找到本配置目录下的 Lua 模块
+local config_dir = os.getenv("CONFIG_DIR") or (home .. "/.config/sketchybar")
+package.path = package.path .. ";" .. config_dir .. "/?.lua"
+package.path = package.path .. ";" .. config_dir .. "/?/init.lua"
+
+local sbar = require("sketchybar")
+
+-- 批量配置:把所有设置打包一次性发给 daemon,启动更快、无闪烁
+sbar.begin_config()
+
+require("bar")      -- bar 全局外观
+require("default")  -- item 默认样式
+require("items")    -- 加载全部组件(items/init.lua)
+
+sbar.end_config()
+
+-- 进入事件循环:保持本进程存活,处理来自 sketchybar 的 Lua 回调
+sbar.event_loop()
