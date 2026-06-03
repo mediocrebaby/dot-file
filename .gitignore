@@ -41,3 +41,7 @@ AGENTS.md
 
 # Codex自带的skills
 .system/
+
+# 忽略不通用的技能
+
+generate-hardware-markdown/
