@@ -3,7 +3,7 @@ local platform = require('utils.platform')
 
 function M.apply(config)
 	---透明度---
-	config.window_background_opacity = 0.6
+	config.window_background_opacity = 0.8
 	config.text_background_opacity = 1
 
 	---平台相关：系统材质 / 模糊---

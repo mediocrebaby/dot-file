@@ -27,7 +27,7 @@ function M.apply(config)
 	config.colors = {
 		scrollbar_thumb = "#242936",
 		tab_bar = {
-			background = "rgba(0,0,0,0)",
+			background = "rgba(31,36,48,0.8)",
 		},
 	}
 end

@@ -75,12 +75,12 @@ local GLYPH_LINUX  = nf.cod_terminal_linux
 local TAB_TITLE_INSET = 4
 
 local tab_title_colors = {
-  text_default = { bg = '#45475A', fg = '#1C1B19' },
+  text_default = { bg = '#7188b0', fg = '#1C1B19' },
   text_hover = { bg = '#7188b0', fg = '#1C1B19' },
   text_active = { bg = '#89b4fa', fg = '#11111B' },
-  scircle_default = { bg = 'rgba(0, 0, 0, 0.4)', fg = '#45475A' },
-  scircle_hover = { bg = 'rgba(0, 0, 0, 0.4)', fg = '#7188b0' },
-  scircle_active = { bg = 'rgba(0, 0, 0, 0.4)', fg = '#89b4fa' },
+  scircle_default = { bg = 'rgba(31, 36, 48, 0.8)', fg = '#7188b0' },
+  scircle_hover = { bg = 'rgba(31,36,48,0.8)', fg = '#7188b0' },
+  scircle_active = { bg = 'rgba(31,36,48,0.8)', fg = '#89b4fa' },
 }
 
 local function clean_process_name(proc)
