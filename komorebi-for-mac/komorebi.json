@@ -4,6 +4,12 @@
   "cross_monitor_move_behaviour": "Insert",
   "default_workspace_padding": 5,
   "default_container_padding": 5,
+  "global_work_area_offset": {
+    "left": 0,
+    "top": 37,
+    "right": 0,
+    "bottom": 37
+  },
   "border": true,
   "border_width": 6,
   "border_offset": -3,
