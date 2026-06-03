@@ -110,7 +110,7 @@
     ]
   },
   "DingTalk":{
-    "floating": [
+    "manage": [
       [
         {
           "kind": "Exe",
