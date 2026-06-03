@@ -1,32 +1,21 @@
 local M = {}
-local wezterm = require 'wezterm'
+local platform = require('utils.platform')
 
 function M.apply(config)
-	---透明效果---
-	config.window_background_opacity = 0.3
+	---透明度---
+	config.window_background_opacity = 0.6
 	config.text_background_opacity = 1
 
-	---窗口图片设置---
-	config.background = {
-		{
-			source = {
-				File = wezterm.home_dir .. "/.config/wezterm/Weeby.png",
-			},
-			opacity = 0.9,
-			hsb = {
-				brightness = 0.2,
-				saturation = 1.0,
-				hue = 1.0,
-			},
-      repeat_x = "Repeat",
-		},
-	}
+	---平台相关：系统材质 / 模糊---
+	if platform.is_windows() then
+		config.win32_system_backdrop = "Mica"
+	elseif platform.is_macos() then
+		config.macos_window_background_blur = 20
+	end
 
-	config.foreground_text_hsb = {
-		hue = 1.0,
-		saturation = 1.0,
-		brightness = 1.0,
-	}
+	---纯色背景---
+	---不显式设置 config.background，
+	---由 appearance.lua 的 color_scheme = "Ayu Mirage" 提供背景色 (≈ #1f2430)
 end
 
 return M
