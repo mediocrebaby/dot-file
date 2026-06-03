@@ -12,3 +12,4 @@ debug
 # lazy.nvim 锁文件：各台机器开发环境/插件集不一致，
 # 共享一份会频繁产生 diff 与冲突，故各机各自本地管理、不入库。
 lazy-lock.json
+lazyvim.json
