@@ -1,23 +1,5 @@
 {
   "$schema": "https://raw.githubusercontent.com/LGUG2Z/komorebi/master/schema.asc.json",
-  "Calculator": {
-    "ignore": [
-      {
-        "kind": "Title",
-        "id": "Calculator",
-        "matching_strategy": "Equals"
-      }
-    ]
-  },
-  "Clash Verge": {
-    "tray_and_multi_window": [
-      {
-        "kind": "Exe",
-        "id": "Clash Verge.exe",
-        "matching_strategy": "Equals"
-      }
-    ]
-  },
   "GitHub Credential Manager": {
     "ignore": [
       {
@@ -128,7 +110,7 @@
     ]
   },
   "DingTalk":{
-    "manage": [
+    "floating": [
       [
         {
           "kind": "Exe",
