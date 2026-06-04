@@ -19,15 +19,6 @@
 *.bak
 *.log.*
 
-# Claude Code 本地状态（勿提交个人数据）
-claude/settings.local.json
-claude/projects/
-claude/todos/
-claude/shell-snapshots/
-claude/statsig/
-claude/ide/
-claude/memory/
-claude/.credentials.json
 
 # Lua 编译产物
 *.luac
@@ -35,13 +26,11 @@ claude/.credentials.json
 # WezTerm 本机覆盖配置（每台设备独有）
 wezterm/local.lua
 
-# CodeStable产物
-CodeStable/
-AGENTS.md
-
 # Codex自带的skills
 .system/
 
 # 忽略不通用的技能
-
 generate-hardware-markdown/
+
+# 忽略 .spec
+.spec/
