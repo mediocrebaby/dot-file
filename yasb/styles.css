@@ -45,11 +45,11 @@ QToolTip {
     padding: 0;
 }
 .widget {
-    padding: 4px 10px;
+    padding: 6px 10px;
     margin: 0;
     background-color: var(--mantle);
     margin: 0 4px;
-    border-radius: 13px;
+    border-radius: 14px;
 }
 .icon,
 .power-menu-widget .label {
@@ -77,9 +77,9 @@ QToolTip {
     margin: 0 4px;
     font-size: 0px;
     color: transparent;
-    width: 12px;
-    height: 12px;
-    border-radius: 6px;
+    width: 14px;
+    height: 14px;
+    border-radius: 7px;
 }
 .komorebi-workspaces .ws-btn:hover {
     background-color: var(--subtext1);
@@ -90,9 +90,9 @@ QToolTip {
 .komorebi-workspaces .ws-btn.active {
     color: transparent;
     background-color: #D3D3D3;
-    width: 36px;
-    max-width: 36px;
-    height: 12px;
+    width: 40px;
+    max-width: 40px;
+    height: 14px;
 }
 .komorebi-workspaces .float-override {
     color: var(--green);
