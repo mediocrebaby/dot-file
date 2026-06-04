@@ -108,7 +108,7 @@
     ]
   },
   "iCost":{
-    "tabbed": [
+    "floating": [
       {
         "kind": "Exe",
         "id": "iCost",
