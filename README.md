@@ -50,6 +50,14 @@ dot-file/
 │   └── applications.json # 应用特定规则（忽略系统应用、Finder/Photos 等定制）
 ├── skhd/                 # skhd 热键守护进程配置（仅 macOS）
 │   └── .skhdrc           # 快捷键绑定（alt 系列，驱动 komorebic）
+├── sketchybar/           # sketchybar 状态栏配置（仅 macOS，替代 Windows 的 yasb）
+│   ├── sketchybarrc      # SbarLua 引导入口（加载 .so 绑定并构建状态栏）
+│   ├── bar / default / colors / icons / settings.lua  # 外观、默认样式、配色、字体尺寸
+│   ├── items/            # 各组件（工作区圆点、堆叠图标、时钟、分组胶囊）
+│   └── helper/           # C++ event provider（komorebi → sketchybar 事件桥接）
+│       ├── main.cpp      # 监听 komorebi socket、解析状态、转图标、mach 推事件
+│       ├── Makefile      # 构建脚本（make 生成 komorebi_provider，二进制不入库）
+│       └── vendor/       # vendored 头文件（sketchybar.h / mach.h / json.hpp）
 ├── .gitignore            # 忽略 macOS、编辑器、日志与 Claude 本地状态
 └── README.md
 ```
@@ -321,6 +329,27 @@ ln -s /path/to/dot-file/skhd/.skhdrc ~/.skhdrc
 
 skhd 会监听配置文件变化并自动重载，保存 `.skhdrc` 后快捷键即时生效。
 
+### 12. 链接 sketchybar 配置并编译 helper（仅 macOS）
+
+> sketchybar 是 macOS 上的状态栏，配合 komorebi-for-mac 显示工作区圆点与聚焦窗口图标，对应 Windows 的 yasb。配置基于 **SbarLua**（Lua 绑定），komorebi 状态由一个常驻 **C++ event provider**（`helper/komorebi_provider`）经 mach 直接推送，取代了早期的 shell 桥接脚本。
+
+sketchybar 从 `~/.config/sketchybar` 读取配置，将整个目录链接过去：
+
+```bash
+mkdir -p ~/.config
+[ -e ~/.config/sketchybar ] && mv ~/.config/sketchybar ~/.config/sketchybar.backup.$(date +%s)
+ln -s /path/to/dot-file/sketchybar ~/.config/sketchybar
+```
+
+helper 的二进制不入库，需本地编译一次（依赖均为 macOS 自带：Xcode Command Line Tools 的 `clang++`、CoreFoundation / CoreGraphics / ImageIO 框架；第三方头文件已 vendored，无需联网）：
+
+```bash
+cd ~/.config/sketchybar/helper
+make
+```
+
+编译产物为 `helper/komorebi_provider`。sketchybar 启动/重载时，lua 会自动干净重启该 helper（先 `killall` 再启动），因此 `make` 完成后执行 `sketchybar --reload`（或 `brew services restart sketchybar`）即可生效。修改 C++ 源码后需重新 `make` 并 `sketchybar --reload`。
+
 ## 更新与回滚
 
 ```bash
@@ -339,5 +368,5 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd、sketchybar 生效，无需重新安装（注意 sketchybar 的 C++ helper 在源码变更后需重新 `make`）。
 
