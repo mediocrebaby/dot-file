@@ -37,7 +37,7 @@ QToolTip {
     border-radius: 6px;
 }
 * {
-    font-size: 11px;
+    font-size: 13px;
     color: #D3D3D3;
     font-weight: 600;
     font-family: Arial, Helvetica;
@@ -54,7 +54,7 @@ QToolTip {
 .icon,
 .power-menu-widget .label {
     font-family: "JetBrainsMono NFP";
-    font-size: 14px;
+    font-size: 18px;
 }
 .widget .label {
     padding: 0 2px 0 2px;
@@ -222,6 +222,7 @@ QToolTip {
 }
 .notification-widget .icon {
     margin-right: 6px;
+    font-size: 23px;
     color: #548585;
 }
  /* Popup window style */

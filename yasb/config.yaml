@@ -90,7 +90,7 @@ widgets:
     type: "komorebi.stack.StackWidget"
     options:
       show_icons: "always"
-      icon_size: 14
+      icon_size: 18
       label_window: ""          # 只显示图标，不显示名称
       label_window_active: ""   # 只显示图标，不显示名称
       label_no_window: ""       # 无窗口聚焦时留空
@@ -100,7 +100,7 @@ widgets:
   notifications:
     type: "yasb.notifications.NotificationsWidget"
     options:
-      label: "{count} <span>\uf476</span>"
+      label: "{count} <span></span>"
       label_alt: "{count} notifications"
       hide_empty: true
       tooltip: true
@@ -115,7 +115,7 @@ widgets:
       label_collapsed: "▼"
       label_expanded: "▶"
       label_position: "left" # Can be "left" or "right"
-      icon_size: 14 # Can be any integer between 8 and 64
+      icon_size: 18 # Can be any integer between 8 and 64
       pin_click_modifier: "alt" # Can be "ctrl", "alt" or "shift"
       show_unpinned: true
       show_unpinned_button: true
@@ -156,7 +156,7 @@ widgets:
   taskbar:
     type: "yasb.taskbar.TaskbarWidget"
     options:
-      icon_size: 14
+      icon_size: 18
       animation:
         enabled: true
         duration: 200
