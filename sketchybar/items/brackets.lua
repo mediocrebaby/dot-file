@@ -31,5 +31,5 @@ capsule("bracket.stack", stack_members)
 
 -- 右:系统信息(CPU/内存/音量/WiFi/时钟合并一个胶囊)
 capsule("bracket.status", {
-  "cpu", "memory", "volume", "wifi", "clock",
+   "clock",
 })
