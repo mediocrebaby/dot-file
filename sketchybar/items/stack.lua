@@ -1,17 +1,15 @@
 -- komorebi 聚焦窗口图标(左侧,紧跟工作区圆点)。纯事件驱动:
--- plugins/komorebi_listener.sh 在每条 komorebi 通知上算好「聚焦目标」的图标(已转 png),
--- 通过事件 komorebi_workspace_change 的 ICONS 参数(逗号分隔的 png 路径)下发,本组件同步渲染。
--- 与左侧工作区圆点消费「同一条通知的 .state」,不再另起 komorebic state 命令查询,
--- 从根上消除「命令 state 滞后于通知」导致的图标停留。
---   · 聚焦单窗口        → 1 个图标
---   · 聚焦堆叠容器      → 堆叠内全部窗口图标
---   · 空工作区/无聚焦目标 → ICONS 为空 → 全部隐藏
+-- C++ helper(komorebi_provider)在每条 komorebi 通知上算好「聚焦目标」的图标(已转 png),
+-- 通过事件 komorebi_workspace_change 的 ICONS 参数(逗号分隔 png 路径)下发,本组件同步渲染。
+--   · STATUS=online,聚焦单窗口   → 1 个图标
+--   · STATUS=online,聚焦堆叠容器  → 堆叠内全部窗口图标
+--   · STATUS=online,空工作区      → ICONS 为空 → 全部隐藏
+--   · STATUS=offline             → komorebi 断连,隐藏图标,改显白色颜文字
 -- 预创建固定数量的图标槽位并复用,按需显示/隐藏,避免频繁增删导致闪烁。
 local sbar = require("sketchybar")
 local settings = require("settings")
 local colors = require("colors")
 
-local script = settings.paths.plugins .. "/komorebi_stack.sh"
 local MAX_ICONS = 14      -- 图标槽位上限
 local ICON_SCALE = 0.30   -- 64px 缓存 → ≈19px 显示
 local ICON_WIDTH = 24     -- 占位宽度(撑开 item 以容纳图标)
@@ -56,6 +54,17 @@ for i = 1, MAX_ICONS do
   })
 end
 
+-- 离线颜文字:komorebi 断连时替代图标显示的白色颜文字(常驻,默认隐藏)
+local offline = sbar.add("item", "komorebi.stack.offline", {
+  position = "left",
+  drawing = false,
+  icon = { drawing = false },
+  label = { string = "(╯°□°)╯︵┻━┻", color = colors.white },
+  background = { drawing = false },
+  padding_left = 2,
+  padding_right = 2,
+})
+
 -- 用 png 路径列表填充图标槽位:有则显示该图标,无则隐藏
 local function render(paths)
   for i = 1, MAX_ICONS do
@@ -70,8 +79,20 @@ local function render(paths)
   end
 end
 
--- 主路径:从事件参数 ICONS(逗号分隔的 png 路径)同步渲染
+-- 离线渲染:隐藏所有图标槽,显示白色颜文字
+local function render_offline()
+  render({})
+  offline:set({ drawing = true })
+end
+
+-- 按事件 STATUS 分派渲染:在线则从 ICONS 同步图标,离线则显颜文字
 local function on_event(env)
+  if (env.STATUS or "online") == "offline" then
+    render_offline()
+    return
+  end
+  offline:set({ drawing = false })
+
   local paths = {}
   for p in (((env or {}).ICONS) or ""):gmatch("[^,]+") do
     if #p > 0 then paths[#paths + 1] = p end
@@ -79,22 +100,11 @@ local function on_event(env)
   render(paths)
 end
 
--- 初始化路径:仅在加载时用脚本查一次(此刻无事件可用,且状态已稳定)
-local function on_script(out)
-  local paths = {}
-  for line in (out or ""):gmatch("[^\r\n]+") do
-    if #line > 0 then paths[#paths + 1] = line end
-  end
-  render(paths)
-end
-
--- 隐藏管理 item:订阅 listener 桥接的「工作区/聚焦变化」事件
+-- 隐藏管理 item:订阅 helper 桥接的「工作区/聚焦变化」事件
 local mgr = sbar.add("item", "komorebi.stack.mgr", {
   position = "left",
   drawing = false,
   updates = true,        -- 隐藏时仍接收事件
 })
 mgr:subscribe("komorebi_workspace_change", on_event)
-
--- 加载时初始化一次(reload 后立即有内容,不必等首个事件)
-sbar.exec("'" .. script .. "'", on_script)
+-- 不再 sbar.exec 初始化:helper 启动时会主动发首个事件覆盖。

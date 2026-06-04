@@ -9,8 +9,9 @@ local settings = {
   paths = {
     home = home,
     config = config_dir,
-    plugins = config_dir .. "/plugins",
-    -- komorebi 事件 socket(订阅者创建并监听;注意无后缀)
+    -- 编译好的 C++ event provider(取代原 plugins 下的 shell 桥接脚本)
+    helper = config_dir .. "/helper/komorebi_provider",
+    -- komorebi 事件 socket(helper 创建并监听;注意无后缀)
     komorebi_socket = home .. "/Library/Application Support/komorebi/sketchybar",
   },
 

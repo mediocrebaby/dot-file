@@ -17,16 +17,18 @@ local function capsule(name, members)
   })
 end
 
--- 左:工作区圆点
+-- 左:工作区圆点(含离线文案占位,离线时替代圆点显示)
 capsule("bracket.workspaces", {
-  "komorebi.space.1", "komorebi.space.2", "komorebi.space.3",
+  "komorebi.space.1", "komorebi.space.2", "komorebi.space.3", "komorebi.offline",
 })
 
 -- 左二(紧跟工作区):堆叠应用图标(成员与 stack.lua 的 MAX_ICONS 一致)
+-- 末位为离线颜文字占位,离线时替代图标显示。
 local stack_members = {}
 for i = 1, 14 do
   stack_members[i] = "komorebi.stack." .. i
 end
+stack_members[#stack_members + 1] = "komorebi.stack.offline"
 capsule("bracket.stack", stack_members)
 
 -- 右:系统信息(CPU/内存/音量/WiFi/时钟合并一个胶囊)

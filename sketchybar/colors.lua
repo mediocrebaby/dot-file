@@ -42,6 +42,10 @@ local colors = {
   ws_populated = rgb(0x548585), -- 有窗口:青色
   ws_active    = rgb(0xd3d3d3), -- 活动:亮白(拉长成胶囊)
 
+  -- komorebi 离线态
+  offline_text = rgb(0x30d158), -- "komorebi offline" 文案:亮绿
+  white        = rgb(0xffffff), -- 离线颜文字:纯白
+
   transparent = 0x00000000,
 }
 
