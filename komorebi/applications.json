@@ -183,6 +183,15 @@
         "matching_strategy":"Regex"
       }
     ]
+  },
+  "ApiPost":{
+    "manage": [
+      {
+        "kind": "Exe",
+        "id": "ApipostEnterprise.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
   }
 }
 
