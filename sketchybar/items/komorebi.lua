@@ -112,8 +112,10 @@ end
 
 -- 干净重启 helper:先杀旧进程,再启动新进程(绑定当前 sketchybar 的 bootstrap 端口)。
 -- komorebi 侧断连重连由 helper 自身负责;sketchybar reload 由本次干净重启兜底。
-local function start_helper()
-  sbar.exec("killall komorebi_provider 2>/dev/null; nohup '"
+-- delay(秒,可选):重启前等待,给系统唤醒后 mach 端口/komorebi 稳定的缓冲时间。
+local function start_helper(delay)
+  local wait = delay and ("sleep " .. delay .. "; ") or ""
+  sbar.exec(wait .. "killall komorebi_provider 2>/dev/null; nohup '"
     .. helper .. "' >/dev/null 2>&1 &")
 end
 
@@ -124,6 +126,14 @@ local manager = sbar.add("item", "komorebi.manager", {
   updates = true,
 })
 manager:subscribe("komorebi_workspace_change", update_spaces)
+
+-- 休眠唤醒兜底:唤醒后 helper 的 listen socket 接收能力(EVFILT_READ)会失效,而 komorebi
+-- 进程通常并未退出 —— helper 的 EVFILT_PROC 不触发,既感知不到、也不会进恢复分支自愈,表
+-- 现为原点/图标卡在休眠前状态不再切换。system_woke 是 sketchybar 唤醒时发出的内置事件,借
+-- 它整个重启 helper(等价于手动 sketchybar --reload 的核心动作),重建 socket + 重新订阅。
+manager:subscribe("system_woke", function()
+  start_helper(1)
+end)
 
 -- 加载时干净重启 helper;初始高亮由 helper 主动查 state 后发首个事件兜底。
 start_helper()
