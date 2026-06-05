@@ -348,7 +348,25 @@ cd ~/.config/sketchybar/helper
 make
 ```
 
-编译产物为 `helper/komorebi_provider`。sketchybar 启动/重载时，lua 会自动干净重启该 helper（先 `killall` 再启动），因此 `make` 完成后执行 `sketchybar --reload`（或 `brew services restart sketchybar`）即可生效。修改 C++ 源码后需重新 `make` 并 `sketchybar --reload`。
+编译产物为 `helper/komorebi_provider` 与 `helper/rime_provider`（后者供下一节「鼠须管中英文状态」使用，由 `make` 一并构建）。sketchybar 启动/重载时，lua 会自动干净重启相应 helper（先 `killall` 再启动），因此 `make` 完成后执行 `sketchybar --reload`（或 `brew services restart sketchybar`）即可生效。修改 C++ 源码后需重新 `make` 并 `sketchybar --reload`。
+
+### 13. 链接鼠须管（Squirrel/Rime）中英文状态导出配置（仅 macOS）
+
+> 在 sketchybar 上显示鼠须管**内部** `ascii_mode`（中文 / 西文）状态——取自输入法运行时的真实内部状态，而非 macOS 输入源切换。原理：一个 librime-lua processor（`lua/ascii_mode_export.lua`）通过 `option_update_notifier` 捕获 `ascii_mode` 变化并原子写入 `~/.cache/rime/ascii_mode`，上一节的 `rime_provider` helper 经 kqueue 监听该文件并经 mach 推送 `rime_ascii_mode_change` 事件给 sketchybar 的 `items/rime.lua` 指示器。
+
+鼠须管的 `~/Library/Rime` 目录含词库、用户词典、语言模型与部署产物，不整目录入库；仅对下列 3 个配置文件创建单文件软链接：
+
+```bash
+mkdir -p ~/Library/Rime/lua
+for f in rime.lua rime_ice.custom.yaml lua/ascii_mode_export.lua; do
+  [ -e ~/Library/Rime/$f ] && [ ! -L ~/Library/Rime/$f ] && mv ~/Library/Rime/$f ~/Library/Rime/$f.backup.$(date +%s)
+  ln -sfn /path/to/dot-file/rime/$f ~/Library/Rime/$f
+done
+```
+
+链接后右键菜单栏鼠须管图标 →「重新部署」（或执行 `"/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --reload`）加载 processor；再确保已按上一节 `make` 出 `rime_provider` 并 `sketchybar --reload`。切换中英文（Caps Lock / Shift）时状态栏即时跟随。
+
+> `rime_ice.custom.yaml` 是雾凇拼音（rime_ice）方案的 patch 文件，仅在使用该方案时生效；若改用其他方案，需把其中 `engine/processors/@before 0: lua_processor@ascii_mode_export` 这条 patch 同样加到对应方案的 `*.custom.yaml`。
 
 ## 更新与回滚
 
@@ -368,5 +386,5 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd、sketchybar 生效，无需重新安装（注意 sketchybar 的 C++ helper 在源码变更后需重新 `make`）。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd、sketchybar、鼠须管中英文状态导出生效，无需重新安装（注意 sketchybar 的 C++ helper 在源码变更后需重新 `make`）。
 
