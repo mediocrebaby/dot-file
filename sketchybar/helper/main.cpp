@@ -10,8 +10,10 @@
 //   --trigger komorebi_workspace_change STATUS=<online|offline>
 //       FOCUSED=<idx> POPULATED=<c0,c1,...> ICONS=<png,png,...>
 //
-// 生命周期:
-//   · komorebi 断连/未运行 → 广播 STATUS=offline,带退避地重订阅、自愈重连。
+// 生命周期(在离线判断均由内核事件驱动,毫秒级,无秒级轮询):
+//   · komorebi 进程退出 → EVFILT_PROC/NOTE_EXIT 即时通知 → 广播 STATUS=offline。
+//   · komorebi 重启 → EVFILT_VNODE 监听其目录,重建 komorebi.sock 即时触发 → 探测恢复、
+//     重订阅、重新监听退出;EVFILT_TIMER 仅作兜底。
 //   · mach 推送失败(sketchybar 退出/reload 致端口失效)→ 快速失败 exit(1),
 //     交由 lua 在下次配置加载时干净重启(killall + 启新)。
 
@@ -27,9 +29,11 @@
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <fcntl.h>
-#include <poll.h>
+#include <sys/event.h>
 #include <unistd.h>
+#include <cerrno>
 #include <csignal>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -44,9 +48,10 @@ const char* kKomorebic   = "/opt/homebrew/bin/komorebic";  // 绝对路径,兼�
 const char* kSockName     = "sketchybar";                  // komorebi 订阅名 = socket 文件名
 const char* kEventName     = "komorebi_workspace_change";    // 与 lua 侧约定的自定义事件
 const char* kCacheDir      = "/tmp/sketchybar_komorebi_icons";
-constexpr int kIconPx      = 64;        // 缓存 png 最大边长,sketchybar 端再缩放
-constexpr int kLivenessMs  = 5000;      // 空闲多久(无事件)后轮询一次 komorebi 存活性
-constexpr size_t kMaxAcc   = 4u << 20;  // 解析缓冲安全上限(4MB),超限丢弃防失控
+constexpr int kIconPx        = 64;       // 缓存 png 最大边长,sketchybar 端再缩放
+constexpr int kRecoveryMs    = 3000;     // 离线兜底:vnode 未触发时轮询探测重启的间隔
+constexpr uintptr_t kTimerId = 1;        // EVFILT_TIMER 标识(与 fd 命名空间独立)
+constexpr size_t kMaxAcc     = 4u << 20; // 解析缓冲安全上限(4MB),超限丢弃防失控
 }
 
 // 主显示器索引(komorebi monitors.elements 下标),可由环境变量覆盖。
@@ -345,10 +350,30 @@ static int make_listen_socket(const std::string& path) {
   return fd;
 }
 
-// 等待 listen_fd 上出现可接收的连接,最多 timeout_ms;有连接返回 true。
-static bool wait_connectable(int listen_fd, int timeout_ms) {
-  pollfd pfd{listen_fd, POLLIN, 0};
-  return poll(&pfd, 1, timeout_ms) > 0 && (pfd.revents & POLLIN);
+// 向 kq 注册对 komorebi 进程退出的监听(EVFILT_PROC/NOTE_EXIT)。
+// 返回被监听的 PID;komorebi 未运行或进程恰好已退出(注册竞态)则返回 -1。
+static int watch_komorebi_exit(int kq) {
+  int pid = atoi(capture("pgrep -x komorebi").c_str());  // 无输出 → 0
+  if (pid <= 0) return -1;
+  struct kevent kev;
+  EV_SET(&kev, pid, EVFILT_PROC, EV_ADD, NOTE_EXIT, 0, nullptr);
+  return kevent(kq, &kev, 1, nullptr, 0, nullptr) < 0 ? -1 : pid;
+}
+
+// 启用/禁用「离线恢复探测」。仅离线期间需要,在线由 NOTE_EXIT 负责:
+//   · EVFILT_VNODE  监听 komorebi 目录,其重启重建 komorebi.sock 时内核即时通知(毫秒级)。
+//   · EVFILT_TIMER  兜底轮询,防 vnode 漏触发(如目录 fd 失效);dir_fd<0 时退化为纯 timer。
+static void set_recovery_watch(int kq, int dir_fd, bool enable) {
+  struct kevent kev[2];
+  int n = 0;
+  if (dir_fd >= 0) {
+    EV_SET(&kev[n++], dir_fd, EVFILT_VNODE,
+           enable ? (EV_ADD | EV_ENABLE | EV_CLEAR) : EV_DISABLE,
+           NOTE_WRITE | NOTE_DELETE | NOTE_RENAME, 0, nullptr);
+  }
+  EV_SET(&kev[n++], cfg::kTimerId, EVFILT_TIMER,
+         enable ? (EV_ADD | EV_ENABLE) : EV_DELETE, 0, cfg::kRecoveryMs, nullptr);
+  kevent(kq, kev, n, nullptr, 0, nullptr);  // 禁用时若未注册返回 ENOENT,忽略
 }
 
 int main() {
@@ -372,30 +397,67 @@ int main() {
     return 1;
   }
 
-  // komorebi-for-mac 的通知模型:订阅持久有效,komorebi 在「每条事件通知」时新建
-  // 一次连接、写入该帧 state、随即关闭(EOF)。故本循环只需持续 accept 每一帧,
-  // 不在 EOF 后重订阅(否则会触发 komorebi 重发并陷入自循环)。
-  // 离线检测独立于事件连接:空闲超过 kLivenessMs 未收到任何帧时,轮询 komorebic state
-  // 作为存活探针 —— 失败判离线,恢复则重订阅以接收后续事件。
-  bool online = refresh_snapshot();  // 即时初始化高亮(komorebi 未运行则离线)
-  komorebic_resubscribe();           // 订阅一次,后续由 komorebi 主动逐帧连入
+  // 事件循环用 kqueue 统一驱动四类来源:
+  //   · EVFILT_READ(listen_fd)    —— komorebi 逐帧短连接连入(每条通知一次)。
+  //   · EVFILT_PROC(NOTE_EXIT)    —— komorebi 进程退出的内核即时通知,毫秒级判离线。
+  //   · EVFILT_VNODE(komorebi 目录)—— 重启重建 komorebi.sock,毫秒级判恢复(仅离线时)。
+  //   · EVFILT_TIMER              —— 离线兜底轮询,防 vnode 漏触发(仅离线时)。
+  // komorebi 的「每帧短连接」模型无法以连接断开判活,故在离线检测改由进程退出/目录变化
+  // 两个内核事件驱动,取代原先依赖空闲超时的秒级轮询。
+  int kq = kqueue();
+  if (kq < 0) { perror("kqueue"); return 1; }
+  struct kevent kev;
+  EV_SET(&kev, listen_fd, EVFILT_READ, EV_ADD, 0, 0, nullptr);
+  kevent(kq, &kev, 1, nullptr, 0, nullptr);
+
+  // 监听 komorebi 配置目录(O_EVTONLY:仅用于事件,不阻止卸载):离线时其内 komorebi.sock
+  // 重建即触发恢复探测。komorebi 未装致目录缺失则 dir_fd<0,降级为纯 timer 兜底。
+  std::string sock_dir = std::string(home) + "/Library/Application Support/komorebi";
+  int dir_fd = open(sock_dir.c_str(), O_RDONLY | O_EVTONLY);
+
+  // komorebi_pid:当前被监听退出的 komorebi PID;-1 表示判为离线(并启用恢复探测)。
+  int komorebi_pid = -1;
+  if (refresh_snapshot()) {     // 即时初始化高亮(komorebi 未运行则离线)
+    komorebic_resubscribe();    // 订阅一次,后续由 komorebi 主动逐帧连入
+    komorebi_pid = watch_komorebi_exit(kq);
+  }
+  set_recovery_watch(kq, dir_fd, komorebi_pid < 0);
 
   for (;;) {
-    if (wait_connectable(listen_fd, cfg::kLivenessMs)) {
-      int conn = accept(listen_fd, nullptr, nullptr);
-      if (conn < 0) continue;
-      DBG("accepted komorebi notification fd=%d", conn);
-      serve_connection(conn);  // 读取该帧并渲染,对端随即关闭
-      close(conn);
-      online = true;
-    } else {
-      // 一段时间无事件:用 komorebic state 探活,顺带在恢复时刷新快照。
-      bool alive = refresh_snapshot();
-      if (alive && !online) {
-        DBG("komorebi recovered -> resubscribe");
-        komorebic_resubscribe();  // komorebi 可能重启过,重新订阅以接收后续事件
+    struct kevent ev;
+    int n = kevent(kq, nullptr, 0, &ev, 1, nullptr);
+    if (n < 0) { if (errno == EINTR) continue; perror("kevent"); return 1; }
+    if (n == 0) continue;
+
+    switch (ev.filter) {
+      case EVFILT_READ: {  // komorebi 推来一帧事件
+        int conn = accept(listen_fd, nullptr, nullptr);
+        if (conn < 0) break;
+        DBG("accepted komorebi notification fd=%d", conn);
+        serve_connection(conn);  // 读取该帧并渲染,对端随即关闭
+        close(conn);
+        if (komorebi_pid < 0) {  // 从离线恢复且尚未监听退出:补注册并停掉探测
+          komorebi_pid = watch_komorebi_exit(kq);
+          if (komorebi_pid >= 0) set_recovery_watch(kq, dir_fd, false);
+        }
+        break;
       }
-      online = alive;
+      case EVFILT_PROC:  // komorebi 进程退出 —— 毫秒级判离线
+        DBG("komorebi exited (pid=%ld) -> offline", static_cast<long>(ev.ident));
+        emit_offline();
+        komorebi_pid = -1;                       // 进程消失,knote 已自动移除
+        set_recovery_watch(kq, dir_fd, true);    // 启用恢复探测(vnode + timer 兜底)
+        break;
+
+      case EVFILT_VNODE:  // komorebi 目录变化(socket 重建)—— 毫秒级探测恢复
+      case EVFILT_TIMER:  // 兜底轮询探测恢复
+        if (refresh_snapshot()) {
+          DBG("komorebi recovered -> resubscribe");
+          komorebic_resubscribe();
+          komorebi_pid = watch_komorebi_exit(kq);
+          if (komorebi_pid >= 0) set_recovery_watch(kq, dir_fd, false);
+        }
+        break;
     }
   }
 }
