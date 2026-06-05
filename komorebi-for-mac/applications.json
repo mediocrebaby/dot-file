@@ -133,5 +133,37 @@
         "matching_strategy": "Equals"
       }
     ]
+  },
+  "滴答清单":{
+    "ignore":[
+      [
+        {
+          "kind": "Exe",
+          "id": "滴答清单",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "Settings",
+          "matching_strategy": "Equals"
+        }
+      ] 
+    ]
+  },
+  "NeatDownload":{
+    "ignore":[
+      [
+        {
+          "kind": "Exe",
+          "id": "NeatDownloadManager",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "Download Completed",
+          "matching_strategy": "Equals"
+        }
+      ] 
+    ]
   }
 }
