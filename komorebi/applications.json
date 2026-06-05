@@ -86,15 +86,6 @@
       }
     ]
   },
-  "ChatWise":{
-    "tray_and_multi_window": [
-      {
-        "kind": "Exe",
-        "id": "ChatWise.exe",
-        "matching_strategy": "Equals"
-      }
-    ]
-  },
   "virtual-drilling-host":{
     "ignore": [
       {
@@ -111,6 +102,20 @@
   },
   "DingTalk":{
     "manage": [
+      [
+        {
+          "kind": "Exe",
+          "id": "DingTalk.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "钉钉",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ],
+    "floating":[
       [
         {
           "kind": "Exe",
@@ -171,7 +176,7 @@
       {
         "kind": "Class",
         "id": "TWINCONTROL",
-        "matching_strategy": "Legacy"
+        "matching_strategy": "Equals"
       }
     ]
   },
@@ -191,6 +196,82 @@
         "id": "ApipostEnterprise.exe",
         "matching_strategy": "Equals"
       }
+    ]
+  },
+  "NeatDownloader":{
+    "ignore":[
+      [
+        {
+          "kind": "Exe",
+          "id": "NeatDM.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "Download Completed",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "powerpoint":{
+    "manage": [
+      [
+        {
+          "kind":"Exe",
+          "id": "POWERPNT.EXE",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "PPTFrameClass",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ],
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "POWERPNT.EXE",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "MsoSplash",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "excel":{
+    "manage": [
+      [
+        {
+          "kind":"Exe",
+          "id": "EXCEL.EXE",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "XLMAIN",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ],
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "EXCEL.EXE",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "MsoSplash",
+          "matching_strategy": "Equals"
+        }
+      ]
     ]
   }
 }
