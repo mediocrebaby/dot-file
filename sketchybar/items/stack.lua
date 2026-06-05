@@ -11,8 +11,8 @@ local settings = require("settings")
 local colors = require("colors")
 
 local MAX_ICONS = 14      -- 图标槽位上限
-local ICON_SCALE = 0.30   -- 64px 缓存 → ≈19px 显示
-local ICON_WIDTH = 24     -- 占位宽度(撑开 item 以容纳图标)
+local ICON_SCALE = 0.35   -- 64px 缓存 → ≈22px 显示
+local ICON_WIDTH = 28     -- 占位宽度(撑开 item 以容纳图标)
 local GROUP_GAP = 32      -- 工作区胶囊与堆叠胶囊之间的间隔宽度
 
 -- 工作区胶囊与堆叠胶囊之间的间隔:独立透明占位 item,不归属任何 bracket

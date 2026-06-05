@@ -36,8 +36,8 @@ for i = 1, WORKSPACE_COUNT do
     },
     background = {
       drawing = true,
-      height = 12,
-      corner_radius = 6,
+      height = 14,
+      corner_radius = 7,
       color = colors.ws_empty,
       border_width = 0,
     },

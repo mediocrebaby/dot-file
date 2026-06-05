@@ -22,7 +22,7 @@ local settings = {
 
   -- bar 整体尺寸(单位为点,Retina 下的视觉尺寸)
   bar = {
-    height = 37,
+    height = 43,
     y_offset = 0,
     padding = 50,   -- bar 左右内边距(增大以拉开最外侧 widget 与屏幕边缘的距离)
     margin = 0,
@@ -30,19 +30,19 @@ local settings = {
 
   -- widget(item)统一外观,复刻 yasb 胶囊
   item = {
-    height = 26,          -- 背景胶囊高度
-    corner_radius = 13,   -- yasb border-radius: 13px
+    height = 30,          -- 背景胶囊高度
+    corner_radius = 15,   -- 保持胶囊形(height/2)
     padding = 4,          -- item 之间的间距(left/right padding)
-    label_padding = 8,    -- 文字到胶囊边缘的内边距
-    icon_padding = 8,
-    gap = 6,              -- 图标与文字之间
+    label_padding = 9,    -- 文字到胶囊边缘的内边距
+    icon_padding = 9,
+    gap = 7,              -- 图标与文字之间
   },
 
   -- 字号
   size = {
-    label = 13.0,
-    icon = 14.0,
-    workspace_dot = 14.0, -- 工作区圆点字号(用 Nerd Font 圆点字形)
+    label = 15.0,
+    icon = 16.0,
+    workspace_dot = 16.0, -- 工作区圆点字号(用 Nerd Font 圆点字形)
   },
 }
 
