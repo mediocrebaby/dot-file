@@ -14,15 +14,24 @@ BIN        := komorebi_provider
 SRC        := main.cpp
 DEPS       := vendor/mach.h vendor/sketchybar.h vendor/json.hpp
 
+BIN2       := rime_provider
+SRC2       := rime_provider.cpp
+DEPS2      := vendor/mach.h vendor/sketchybar.h
+
 CXX        ?= clang++
 # -Wno-deprecated-declarations:抑制 task_get_special_port / CC_MD5 的弃用告警。
 CXXFLAGS   := -std=c++17 -O2 -Wall -Wno-deprecated-declarations
 FRAMEWORKS := -framework CoreFoundation -framework CoreGraphics -framework ImageIO
 
+all: $(BIN) $(BIN2)
+
 $(BIN): $(SRC) $(DEPS)
 	$(CXX) $(CXXFLAGS) $(SRC) $(FRAMEWORKS) -o $(BIN)
 
-clean:
-	rm -f $(BIN)
+$(BIN2): $(SRC2) $(DEPS2)
+	$(CXX) $(CXXFLAGS) $(SRC2) -o $(BIN2)
 
-.PHONY: clean
+clean:
+	rm -f $(BIN) $(BIN2)
+
+.PHONY: all clean

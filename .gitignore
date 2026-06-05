@@ -25,6 +25,7 @@
 
 # sketchybar C++ helper 构建产物（源码/Makefile/vendor 入库，二进制本地 make 生成）
 sketchybar/helper/komorebi_provider
+sketchybar/helper/rime_provider
 sketchybar/helper/*.o
 
 # WezTerm 本机覆盖配置（每台设备独有）

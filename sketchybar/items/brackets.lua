@@ -31,7 +31,7 @@ end
 stack_members[#stack_members + 1] = "komorebi.stack.offline"
 capsule("bracket.stack", stack_members)
 
--- 右:系统信息(CPU/内存/音量/WiFi/时钟合并一个胶囊)
+-- 右:系统信息(Rime 输入模式 + 时钟合并一个胶囊)
 capsule("bracket.status", {
-   "clock",
+  "rime.input_mode", "clock",
 })
