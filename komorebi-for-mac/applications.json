@@ -186,7 +186,7 @@
     ]
   },
   "CleanMyMac":{
-    "ignore": [
+    "floating": [
       {
         "kind":"Exe",
         "id": "CleanMyMac",
@@ -201,20 +201,6 @@
         "id": "夸克",
         "matching_strategy": "Equals"
       }
-    ],
-    "ignore":[
-      [
-        {
-          "kind":"Exe",
-          "id": "夸克",
-          "matching_strategy":"Equals"
-        },
-        {
-          "kind":"Title",
-          "id": " - 夸克",
-          "matching_strategy": "EndsWith"
-        }
-      ]
     ]
   },
   "归档使用工具":{
