@@ -14,6 +14,15 @@
     "name": "Ashes",
     "unfocused_border": "Base03",
     "bar_accent": "Base0D"
+  },  
+  "animation": {
+    "enabled": true,
+    "duration": 250,
+    "fps": 160,
+    "style": {
+        "movement":"EaseOutBack",
+        "transparency": "Linear"
+    }
   },
   "monitors": [
     {
