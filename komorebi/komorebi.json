@@ -30,14 +30,6 @@
         {
           "name": "Monitor 1, Workspace 1",
           "layout": "Grid"
-        },
-        {
-          "name": "Monitor 1, Workspace 2",
-          "layout": "Grid"
-        },
-        {
-          "name": "Monitor 1, Workspace 3",
-          "layout": "Grid"
         }
       ]
     }
