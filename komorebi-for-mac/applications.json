@@ -4,7 +4,14 @@
     "tabbed": [
       {
         "kind": "Exe",
-        "id": "Finder",
+        "id": "访达",
+        "matching_strategy": "Equals"
+      }
+    ],
+    "titleless": [
+      {
+        "kind": "Exe",
+        "id": "访达",
         "matching_strategy": "Equals"
       }
     ],
@@ -12,24 +19,36 @@
       [
         {
           "kind": "Exe",
-          "id": "Finder",
+          "id": "访达",
           "matching_strategy": "Equals"
         },
         {
           "kind": "Title",
-          "id": "Info",
+          "id": "简介",
           "matching_strategy": "EndsWith"
         }
       ],
       [
         {
           "kind": "Exe",
-          "id": "Finder",
+          "id": "访达",
           "matching_strategy": "Equals"
         },
         {
           "kind": "Title",
-          "id": "Copy",
+          "id": "拷贝",
+          "matching_strategy": "Equals"
+        }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "访达",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "",
           "matching_strategy": "Equals"
         }
       ]
@@ -160,10 +179,122 @@
         },
         {
           "kind": "Title",
-          "id": "Download Completed",
-          "matching_strategy": "Equals"
+          "id": "Neat Download Manager",
+          "matching_strategy": "DoesNotContain"
         }
       ] 
+    ]
+  },
+  "CleanMyMac":{
+    "ignore": [
+      {
+        "kind":"Exe",
+        "id": "CleanMyMac",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "夸克":{
+    "tabbed": [
+      {
+        "kind":"Exe",
+        "id": "夸克",
+        "matching_strategy": "Equals"
+      }
+    ],
+    "ignore":[
+      [
+        {
+          "kind":"Exe",
+          "id": "夸克",
+          "matching_strategy":"Equals"
+        },
+        {
+          "kind":"Title",
+          "id": " - 夸克",
+          "matching_strategy": "EndsWith"
+        }
+      ]
+    ]
+  },
+  "归档使用工具":{
+    "ignore":[
+        {
+          "kind": "Exe",
+          "id": "归档实用工具",
+          "matching_strategy": "Equals"
+        }
+      ]
+  },
+  "隐私与安全":{
+    "ignore":[
+      {
+        "kind":"Exe",
+        "id": "coreautha",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "IDA": {
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "IDA",
+          "matching_strategy": "StartsWith"
+        },
+        {
+          "kind": "Title",
+          "id": "Setup",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
+  },
+  "安装器": {
+    "ignore":[
+      {
+        "kind": "Exe",
+        "id": "安装器",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "SecurityAgent":{
+    "ignore": [
+      {
+        "kind": "Exe",
+        "id": "SecurityAgent",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "微信":{
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "微信",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "语音聊天",
+          "matching_strategy": "Equals"
+        }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "微信",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Title",
+          "id": "图片和视频",
+          "matching_strategy": "Equals"
+        }
+      ]
     ]
   }
 }
