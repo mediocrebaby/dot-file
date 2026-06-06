@@ -12,6 +12,10 @@ function M.apply(config)
   else
     mod_key = "CTRL"
   end
+
+  local super_key = "CMD"
+
+
   config.leader = { key = "a", mods = mod_key, timeout_milliseconds = 1500 }
 	--- 快捷键 ---
 	config.keys = {
@@ -82,7 +86,7 @@ function M.apply(config)
 	for i = 1, 9 do
 		table.insert(config.keys, {
 			key = tostring(i),
-			mods = mod_key,
+			mods = "ALT",
 			action = wezterm.action.ActivateTab(i - 1),
 		})
 	end
