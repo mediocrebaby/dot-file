@@ -211,6 +211,18 @@
           "id": "Download Completed",
           "matching_strategy": "Equals"
         }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "NeatDM.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "NeatDownloadWindow",
+          "matching_strategy": "Equals"
+        }
       ]
     ]
   },
@@ -273,6 +285,66 @@
         }
       ]
     ]
+  },
+  "steam":{
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "steam.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind":"Class",
+          "id": "BootstrapUpdateUIClass",
+          "matching_strategy": "Equals"
+        }
+      ],
+      [
+        {
+          "kind": "Exe",
+          "id": "steamwebhelper.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind":"Title",
+          "id": "Steam",
+          "matching_strategy": "DoesNotContain"
+        }
+      ]
+    ]
+  },
+  "安装程序":{
+    "ignore":[
+      {
+        "kind": "Title",
+        "id": "安装",
+        "matching_strategy": "Contains"
+      },
+      {
+        "kind": "Class",
+        "id": "#32770",
+        "matching_strategy": "Equals"
+      }
+    ]
+  },
+  "wezterm":{
+    "tray_and_multi_window": [
+      {
+        "kind": "Exe",
+        "id": "wezterm-gui.exe",
+        "matching_strategy": "Equals"
+      }
+    ],
+    "slow_application": [
+      {
+        "kind": "Exe",
+        "id": "wezterm-gui.exe",
+        "matching_strategy": "Equals"
+      }
+    ]
   }
+  
+
 }
 
