@@ -10,7 +10,9 @@ function M.apply(config)
 			local success, stdout, _ = wezterm.run_child_process({ "where", cmd })
 			return success and stdout and stdout ~= ""
 		end
-		if command_exists("pwsh.exe") then
+		if command_exists("nu.exe") then
+			config.default_prog = { "nu.exe" }
+		elseif command_exists("pwsh.exe") then
 			config.default_prog = { "pwsh.exe", "-l" }
 		elseif command_exists("powershell.exe") then
 			config.default_prog = { "powershell.exe", "-NoLogo" }
