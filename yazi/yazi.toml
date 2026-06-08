@@ -14,9 +14,3 @@ prepend_rules = [
 append_rules = [
   { url = "*.md", use = "edit"},
 ]
-
-[plugin]
-prepend_fetchers = [
-  { url = "*",  run = "git", group = "git" },
-  { url = "*/", run = "git", group = "git" },
-]

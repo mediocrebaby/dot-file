@@ -2,10 +2,3 @@
 dark = "catppuccin-mocha"
 light = "catppuccin-mocha"
 
-[git] 
-modified_sign = "M"
-added_sign    = "A"
-deleted_sign  = "D"
-ignored_sign  = "I"
-untracked_sign = "U"
-
