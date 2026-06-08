@@ -9,8 +9,7 @@
       }
     ],
     "titleless": [
-      {
-        "kind": "Exe",
+      { "kind": "Exe",
         "id": "访达",
         "matching_strategy": "Equals"
       }
@@ -212,11 +211,16 @@
         }
       ]
   },
-  "隐私与安全":{
+  "隐私与安全性":{
     "ignore":[
       {
         "kind":"Exe",
         "id": "coreautha",
+        "matching_strategy": "Equals"
+      },
+      {
+        "kind": "Exe",
+        "id": "隐私与安全性",
         "matching_strategy": "Equals"
       }
     ]
