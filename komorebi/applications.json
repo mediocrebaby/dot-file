@@ -335,13 +335,6 @@
         "id": "wezterm-gui.exe",
         "matching_strategy": "Equals"
       }
-    ],
-    "slow_application": [
-      {
-        "kind": "Exe",
-        "id": "wezterm-gui.exe",
-        "matching_strategy": "Equals"
-      }
     ]
   }
   
