@@ -4,6 +4,7 @@
   "app_specific_configuration_path": "$Env:USERPROFILE/applications.json",
   "window_hiding_behaviour": "Cloak",
   "cross_monitor_move_behaviour": "Insert",
+  "focus_follows_mouse": "Komorebi",
   "default_workspace_padding": 5,
   "default_container_padding": 5,
   "border": true,
