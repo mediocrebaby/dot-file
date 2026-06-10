@@ -19,6 +19,10 @@ return {
         "permissions",
         "size"
       },
+      -- 新增快捷键，q 退出
+      keymaps = {
+        ["q"] = "actions.close"
+      },
       -- 将删除的文件移动到回收站
       delete_to_trash = true
     },
