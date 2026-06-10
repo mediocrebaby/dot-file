@@ -80,6 +80,8 @@ function M.apply(config)
 		{ key = "End",  mods = "LEADER", action = wezterm.action.ScrollToBottom },
 		-- Ctrl + V:粘贴
 		{ key = "v", mods = mod_key, action = wezterm.action.PasteFrom("Clipboard") },
+    -- Leader + x:  进入 Copy 模式
+		{ key = "x", mods = "LEADER", action = wezterm.action.ActivateCopyMode },
 	}
 
 	-- Alt + 1-9 切换标签页
