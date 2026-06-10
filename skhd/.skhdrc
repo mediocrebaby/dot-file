@@ -56,11 +56,11 @@ alt - x                 : komorebic flip-layout horizontal
 alt - y                 : komorebic flip-layout vertical
 
 # Workspaces
-cmd - 1                 : komorebic focus-workspace 0
-cmd - 2                 : komorebic focus-workspace 1
-cmd - 3                 : komorebic focus-workspace 2
+alt - 1                 : komorebic focus-workspace 0
+alt - 2                 : komorebic focus-workspace 1
+alt - 3                 : komorebic focus-workspace 2
 
 # Move windows across workspaces
-cmd + shift - 1         : komorebic move-to-workspace 0
-cmd + shift - 2         : komorebic move-to-workspace 1
-cmd + shift - 3         : komorebic move-to-workspace 2
+alt + shift - 1         : komorebic move-to-workspace 0
+alt + shift - 2         : komorebic move-to-workspace 1
+alt + shift - 3         : komorebic move-to-workspace 2
