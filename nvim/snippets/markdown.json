@@ -1,0 +1,13 @@
+{
+  "Front Matter": {
+    "prefix": "fm",
+    "description": "Insert front matter with current date",
+    "body": [
+      "---",
+      "date: $CURRENT_YEAR-$CURRENT_MONTH-$CURRENT_DATE",
+      "tags: []",
+      "---",
+      ""
+    ]
+  }
+}
