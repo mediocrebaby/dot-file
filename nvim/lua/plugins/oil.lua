@@ -15,9 +15,10 @@ return {
 
       -- 列表项，通过 :help oil-columns 查看
       columns = {
-        "icon",
         "permissions",
-        "size"
+        "size",
+        "mtime",
+        "icon"
       },
       -- 新增快捷键，q 退出
       keymaps = {
