@@ -336,8 +336,22 @@
         "matching_strategy": "Equals"
       }
     ]
+  },
+  "Explore":{
+    "ignore": [
+      [
+        {
+          "kind": "Exe",
+          "id": "explorer.exe",
+          "matching_strategy": "Equals"
+        },
+        {
+          "kind": "Class",
+          "id": "OperationStatusWindow",
+          "matching_strategy": "Equals"
+        }
+      ]
+    ]
   }
-  
-
 }
 

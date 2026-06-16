@@ -1,8 +1,8 @@
 .shell powershell
 
 
-# 强制管理窗口
-alt + f                 : komorebic manage
+# 强制聚焦到某一个窗口
+alt + f                 : komorebic force-focus
 
 # Reload whkd configuration
 alt + shift + o         : komorebic reload-configuration
@@ -47,7 +47,9 @@ alt + shift + oem_minus : komorebic resize-axis vertical decrease
 
 # Manipulate windows
 alt + t                 : komorebic toggle-float
-alt + shift + f         : komorebic toggle-monocle
+
+# 强制管理窗口
+alt + shift + f         : komorebic manage
 
 # Window manager options
 alt + shift + r         : komorebic retile
