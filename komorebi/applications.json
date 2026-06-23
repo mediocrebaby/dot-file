@@ -190,7 +190,7 @@
     ]
   },
   "ApiPost":{
-    "manage": [
+    "floating": [
       {
         "kind": "Exe",
         "id": "ApipostEnterprise.exe",
