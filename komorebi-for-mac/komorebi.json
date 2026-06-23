@@ -4,14 +4,6 @@
   "cross_monitor_move_behaviour": "Insert",
   "default_workspace_padding": 5,
   "default_container_padding": 5,
-  "animation": {
-    "enabled": true,
-    "duration": 200,
-    "fps": 160,
-    "style": {
-        "movement":"EaseOutBack"
-    }
-  },
   "border": true,
   "border_width": 6,
   "border_offset": -3,
