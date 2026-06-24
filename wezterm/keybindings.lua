@@ -45,8 +45,6 @@ function M.apply(config)
 		},
 		-- Leader + w:关闭当前标签页(不确认)
 		{ key = "w", mods = "LEADER", action = wezterm.action.CloseCurrentTab({ confirm = false }) },
-		-- Leader + Tab:切换到下一个标签页
-		{ key = "Tab", mods = "LEADER", action = wezterm.action.ActivateTabRelative(1) },
 		-- Leader + 方向键:在窗格之间移动
 		{ key = "LeftArrow",  mods = "LEADER",     action = wezterm.action.ActivatePaneDirection("Left") },
 		{ key = "DownArrow",  mods = "LEADER",     action = wezterm.action.ActivatePaneDirection("Down") },
@@ -67,8 +65,6 @@ function M.apply(config)
 		{ key = "\\", mods = "LEADER", action = wezterm.action_callback(function(window, pane)
 			domains.split_with_cwd(window, pane, "Horizontal")
 		end) },
-		-- Leader + t:切换标签栏显示 / 隐藏
-		{ key = "t", mods = "LEADER", action = wezterm.action.EmitEvent("toggle-tab-bar") },
 		-- Leader + f:搜索
 		{ key = "f", mods = "LEADER", action = wezterm.action.Search("CurrentSelectionOrEmptyString") },
 		-- Leader + p:打开 Launcher

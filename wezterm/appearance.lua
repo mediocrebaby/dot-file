@@ -18,17 +18,9 @@ function M.apply(config)
 	config.window_close_confirmation = "NeverPrompt"
 
 	--- 标签栏与配色 ---
-	config.enable_tab_bar = true
-	config.show_new_tab_button_in_tab_bar = false
-	config.show_tab_index_in_tab_bar = false
-	config.switch_to_last_active_tab_when_closing_tab = true
-	config.tab_max_width = 25
-	config.use_fancy_tab_bar = false
+	config.enable_tab_bar = false
 	config.colors = {
 		scrollbar_thumb = "#242936",
-		tab_bar = {
-			background = "rgba(31,36,48,0.8)",
-		},
 	}
 end
 
