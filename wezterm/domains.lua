@@ -127,7 +127,7 @@ end
 local function spawn_tab_in_domain_with_cwd(window, pane, domain_name)
 	local cwd = get_current_dir_for_domain(pane, domain_name)
 	window:perform_action(
-		wezterm.action.SpawnCommandInNewTab({
+		wezterm.action.SpawnCommandInNewWindow({
 			domain = { DomainName = domain_name },
 			cwd = cwd,
 		}),
@@ -155,7 +155,7 @@ local function spawn_vs_tab(window, pane, arch)
 	local ps_arch = (arch == "x64") and "amd64" or arch
 	local command = string.format("& '%s' -Arch %s  -SkipAutomaticLocation", VS_DEV_SHELL_PATH, ps_arch)
 	window:perform_action(
-		wezterm.action.SpawnCommandInNewTab({
+		wezterm.action.SpawnCommandInNewWindow({
 			domain = { DomainName = "local" },
 			cwd = cwd,
 			args = { "pwsh", "-NoLogo", "-NoExit", "-Command", command },
@@ -185,22 +185,22 @@ function M.setup()
     wezterm.on("augment-command-palette", function(window, pane)
       return {
         {
-          brief = "New tab: WSL Ubuntu  (current cwd)",
+          brief = "New window: WSL Ubuntu  (current cwd)",
           action = wezterm.action.EmitEvent("command_palette_spawn_wsl_ubuntu"),
           icon = "cod_terminal_ubuntu",
         },
         {
-          brief = "New tab: local (current cwd)",
+          brief = "New window: local (current cwd)",
           action = wezterm.action.EmitEvent("command_palette_spawn_local"),
           icon = "cod_terminal_powershell",
         },
         {
-          brief = "New tab: Visual Studio 2022 (x64)",
+          brief = "New window: Visual Studio 2022 (x64)",
           action = wezterm.action.EmitEvent("command_palette_spawn_vs_x64"),
           icon = "dev_visualstudio",
         },
         {
-          brief = "New tab: Visual Studio 2022 (x86)",
+          brief = "New window: Visual Studio 2022 (x86)",
           action = wezterm.action.EmitEvent("command_palette_spawn_vs_x86"),
           icon = "dev_visualstudio",
         },
