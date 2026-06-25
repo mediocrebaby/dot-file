@@ -36,6 +36,7 @@ wezterm/local.lua
 
 # 忽略不通用的技能
 generate-hardware-markdown/
+codebase-memory/
 
 # 忽略 .spec
 .spec/
