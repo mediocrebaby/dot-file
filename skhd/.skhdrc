@@ -1,6 +1,6 @@
 
 # 强制管理窗口
-alt - f                 : komorebic manage
+alt + shift - f                 : komorebic manage
 
 # Reload whkd configuration
 alt + shift - o         : komorebic reload-configuration
@@ -45,7 +45,7 @@ alt + shift - 0x1B : komorebic resize-axis vertical decrease
 
 # Manipulate windows
 alt - t                 : komorebic toggle-float
-alt + shift - f         : komorebic toggle-monocle
+alt - f                 : komorebic force-focus
 
 # Window manager options
 alt + shift - r         : komorebic retile
