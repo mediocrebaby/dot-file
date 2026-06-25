@@ -5,7 +5,7 @@ local local_config = require('utils.local_config')
 
 function M.apply(config)
 	config.font = wezterm.font_with_fallback({
-		"JetBrainsLxgwNerdMono",
+		"IosevkaLxgwNerdMono",
 	})
 
 	if local_config.font_size then
