@@ -9,7 +9,10 @@ function M.apply(config)
 	config.exit_behavior_messaging = "Verbose"
 	config.status_update_interval = 50000
 	config.notification_handling = "AlwaysShow"
+  config.default_cursor_style = "SteadyBar"
+  config.force_reverse_video_cursor=true
   config.cursor_smear_duration_ms = 150
+  config.cursor_thickness = 2
   config.cursor_trail_size = 1.0
 end
 
