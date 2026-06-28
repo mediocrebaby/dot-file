@@ -13,6 +13,12 @@
     "unfocused_border": "Base03",
     "bar_accent": "Base0D"
   },  
+  "animation":{
+    "enabled": true,
+    "style": "EaseInOutCubic",
+    "fps":  60,
+    "duration": 250
+  },
   "monitors": [
     {
       "workspaces": [

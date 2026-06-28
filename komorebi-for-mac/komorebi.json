@@ -11,6 +11,12 @@
   "ignore_rules": [],
   "floating_applications": [],
   "manage_rules": [],
+  "animation":{
+    "enabled": true,
+    "style": "EaseInOutCubic",
+    "fps": 60,
+    "duration": 250
+  },
   "monitors": [
     {
       "workspaces": [
