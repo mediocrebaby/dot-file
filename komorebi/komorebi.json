@@ -24,11 +24,11 @@
       "workspaces": [
         {
           "name": "Monitor 1, Workspace 1",
-          "layout": "Grid"
+          "layout": "BSP"
         },
         {
           "name": "Monitor 1, Workspace 2",
-          "layout": "Grid"
+          "layout": "BSP"
         },
         {
           "name": "Monitor 1, Workspace 3",
