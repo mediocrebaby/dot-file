@@ -7,7 +7,7 @@ require('appearance').apply(config)
 require('shell').apply(config)
 require('keybindings').apply(config)
 require('domains').setup()
-require('background').apply(config)
+-- require('background').apply(config)
 require('advanced').apply(config)
 
 return config
