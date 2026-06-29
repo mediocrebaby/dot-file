@@ -206,6 +206,19 @@ function M.setup()
         },
       }
     end)
+  else
+    wezterm.on("command_palette_spawn_local", function(window, pane)
+      spawn_tab_in_domain_with_cwd(window, pane, "local")
+    end)
+    wezterm.on("augment-command-palette", function(window, pane)
+      return {
+        {
+          brief = "New window: local (current cwd)",
+          action = wezterm.action.EmitEvent("command_palette_spawn_local"),
+          icon = "cod_terminal_powershell",
+        }
+      }
+    end)
   end
 end
 
