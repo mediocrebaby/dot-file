@@ -1,6 +1,6 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code**、**Neovim**、**WezTerm**、**Yazi**，以及跨平台平铺窗口管理 —— Windows 用三件套 **komorebi**、**whkd**、**yasb**，macOS 用 **komorebi-for-mac** + **skhd** —— 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **Claude Code**、**Neovim**、**WezTerm**，以及跨平台平铺窗口管理 —— Windows 用三件套 **komorebi**、**whkd**、**yasb**，macOS 用 **komorebi-for-mac** + **skhd** —— 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
@@ -11,34 +11,35 @@
 ```
 dot-file/
 ├── claude/               # Claude Code 配置（对应系统目录 ~/.claude/，去掉前导点以便在资源管理器中显示）
-│   └── skills/           # 技能包（committing-changes / grill-me / planning-implementation）
+│   └── skills/           # 技能包（committing-changes / grill-me / grill-with-doc / coder）
+│       ├── coder/                # 编码行为准则：避免过度设计、外科手术式改动、显式陈述假设、定义可验证的成功标准
+│       ├── committing-changes/   # 分析 git 改动并生成提交
+│       ├── grill-me/             # 对模糊需求进行严格盘问，达成共识
+│       └── grill-with-doc/       # 结合领域模型 / 文档压力测试计划（含 CONTEXT.md、ADR 格式模板）
 ├── nvim/                 # Neovim 配置（基于 LazyVim，Lua 模块化）
-│   ├── init.lua          # 入口文件，加载 config 模块
-│   ├── lua/config/       # 核心配置：lazy.lua（插件管理引导）、options / keymaps / autocmds
+│   ├── init.lua          # 入口文件，加载 config.lazy
+│   ├── lua/config/       # 核心配置：lazy.lua（插件引导 + 按需加载 dotnet extra）、options / keymaps / autocmds
+│   ├── lua/plugins/      # 自定义插件覆盖：claudecode / colorscheme(tokyonight) / markdown(markview) / oil
+│   ├── lua/utils/        # 工具模块：platform.lua（判断 Windows/macOS/Linux/WSL、探测可执行命令）
+│   ├── snippets/         # 个人代码片段（friendly-snippets 格式，当前含 markdown）
 │   ├── stylua.toml       # StyLua 格式化规则（2 空格缩进、行宽 120）
-│   └── .neoconf.json     # neoconf.nvim / lua_ls LSP 设置
+│   ├── .neoconf.json     # neoconf.nvim / lua_ls LSP 设置
+│   └── .gitignore        # 忽略 lazy-lock.json / lazyvim.json 等各机各异、不宜共享的文件
 ├── wezterm/              # WezTerm 终端模拟器配置（Lua 模块化）
 │   ├── wezterm.lua       # 入口文件，组装各子模块
 │   ├── appearance.lua    # 配色与窗口外观
-│   ├── background.lua    # 背景图片（Weeby.png）
+│   ├── background.lua    # 背景图片
 │   ├── font.lua          # 字体与字号
 │   ├── keybindings.lua   # 快捷键与鼠标绑定
-│   ├── tab_style.lua     # 标签栏样式
 │   ├── shell.lua         # 默认 shell 与启动参数
 │   ├── domains.lua       # SSH / Unix / WSL 域
 │   ├── events.lua        # 自定义事件回调
 │   ├── advanced.lua      # 其他高级选项
-│   ├── utils/            # 工具模块（平台判断、本机覆盖加载）
+│   ├── utils/            # 工具模块（platform 平台判断、local_config 本机覆盖加载）
+│   ├── img/              # 效果图等静态资源
 │   └── local.lua.example # 本机覆盖配置示例（字号、WSL distro）
-├── yazi/                 # Yazi 文件管理器配置
-│   ├── yazi.toml         # 主配置（显示隐藏文件、用 Neovim 打开）
-│   ├── keymap.toml       # 按键映射
-│   ├── theme.toml        # 主题
-│   ├── package.toml      # 插件 / flavor 包管理
-│   ├── flavors/          # 配色 flavor（catppuccin-mocha）
-│   └── plugins/          # 插件（smart-enter）
 ├── komorebi/             # komorebi 平铺窗口管理器配置（仅 Windows）
-│   ├── komorebi.json     # 主配置（BSP 布局、边框、Base16 Ashes 主题、工作区）
+│   ├── komorebi.json     # 主配置（BSP 布局、边框、工作区、窗口动画）
 │   └── applications.json # 应用特定规则（按应用定制窗口行为）
 ├── whkd/                 # whkd 热键守护进程配置（仅 Windows）
 │   └── whkdrc            # 快捷键绑定（alt 系列，驱动 komorebic）
@@ -46,19 +47,12 @@ dot-file/
 │   ├── config.yaml       # 状态栏布局与组件
 │   └── styles.css        # 状态栏样式
 ├── komorebi-for-mac/     # komorebi-for-mac 平铺窗口管理器配置（仅 macOS）
-│   ├── komorebi.json     # 主配置（Grid 布局、工作区、应用规则路径）
+│   ├── komorebi.json     # 主配置（BSP 布局、工作区、应用规则路径）
 │   └── applications.json # 应用特定规则（忽略系统应用、Finder/Photos 等定制）
 ├── skhd/                 # skhd 热键守护进程配置（仅 macOS）
 │   └── .skhdrc           # 快捷键绑定（alt 系列，驱动 komorebic）
-├── sketchybar/           # sketchybar 状态栏配置（仅 macOS，替代 Windows 的 yasb）
-│   ├── sketchybarrc      # SbarLua 引导入口（加载 .so 绑定并构建状态栏）
-│   ├── bar / default / colors / icons / settings.lua  # 外观、默认样式、配色、字体尺寸
-│   ├── items/            # 各组件（工作区圆点、堆叠图标、时钟、分组胶囊）
-│   └── helper/           # C++ event provider（komorebi → sketchybar 事件桥接）
-│       ├── main.cpp      # 监听 komorebi socket、解析状态、转图标、mach 推事件
-│       ├── Makefile      # 构建脚本（make 生成 komorebi_provider，二进制不入库）
-│       └── vendor/       # vendored 头文件（sketchybar.h / mach.h / json.hpp）
-├── .gitignore            # 忽略 macOS、编辑器、日志与 Claude 本地状态
+├── .gitattributes        # 强制文本文件以 LF 入库，避免多机换行符 diff
+├── .gitignore            # 忽略 macOS、编辑器、日志与本机覆盖等文件
 └── README.md
 ```
 
@@ -84,6 +78,8 @@ cd \path\to\dot-file
 
 ### 2. 链接 Claude Code Skills 配置
 
+Claude Code 在 `~/.claude/skills/` 下加载技能。将本仓库 `claude/skills` 链接过去：
+
 #### macOS / Linux
 
 ```bash
@@ -101,6 +97,7 @@ $dst = "$env:USERPROFILE\.claude\skills"
 if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
 New-Item -ItemType SymbolicLink -Path $dst -Target $src
 ```
+
 CMD（管理员）等价写法：
 
 ```cmd
@@ -140,7 +137,7 @@ CMD（管理员）：
 mklink /D "%LOCALAPPDATA%\nvim" "\path\to\dot-file\nvim"
 ```
 
-首次启动 `nvim` 时 lazy.nvim 会自动安装插件，等待安装完成即可。
+首次启动 `nvim` 时 lazy.nvim 会自动安装插件，等待安装完成即可。C#（.NET）相关扩展仅在检测到系统存在 `dotnet` 命令时才加载，未装 .NET SDK 的机器会静默跳过。`lazy-lock.json`、`lazyvim.json` 各机各异，已在 `nvim/.gitignore` 中忽略，不随仓库同步。
 
 ### 4. 链接 WezTerm 配置
 
@@ -174,11 +171,12 @@ CMD（管理员）：
 mkdir "%USERPROFILE%\.config"
 mklink /D "%USERPROFILE%\.config\wezterm" "path\to\dot-file\wezterm"
 ```
+
 重启 WezTerm 或按 `Ctrl+Shift+R` 重新加载配置。
 
 ### 5. WezTerm 本机覆盖（每台设备独有的设置）
 
-字号、WSL distro 这种"每台机器最优值不一样"的字段，通过 `wezterm/local.lua` 覆盖。该文件已被 `.gitignore`，不会同步到其他设备。
+字号、WSL distro 这种“每台机器最优值不一样”的字段，通过 `wezterm/local.lua` 覆盖（`wezterm/utils/local_config.lua` 会尝试加载它，缺失时静默跳过）。该文件已被 `.gitignore`，不会同步到其他设备。
 
 ```bash
 # macOS / Linux
@@ -193,46 +191,11 @@ Copy-Item \path\to\dot-file\wezterm\local.lua.example \path\to\dot-file\wezterm\
 ```lua
 return {
     font_size  = 14.0,             -- 字号；nil 用默认
-    wsl_distro = "Ubuntu-24.04",   -- WSL distro 名；nil 用 "Ubuntu-22.04"
+    wsl_distro = "Ubuntu-24.04",   -- WSL distro 名；nil 用默认
 }
 ```
 
-### 6. 链接 Yazi 配置
-
-#### macOS / Linux
-
-Yazi 默认在 `~/.config/yazi/` 查找配置：
-
-```bash
-mkdir -p ~/.config
-[ -e ~/.config/yazi ] && mv ~/.config/yazi ~/.config/yazi.backup.$(date +%s)
-ln -s /path/to/dot-file/yazi ~/.config/yazi
-```
-
-#### Windows
-
-Yazi 在 Windows 下使用 `%APPDATA%\yazi\config\`：
-
-PowerShell（管理员）：
-
-```powershell
-$src = "\path\to\dot-file\yazi"
-$dst = "$env:APPDATA\yazi\config"
-New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
-if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
-New-Item -ItemType SymbolicLink -Path $dst -Target $src
-```
-
-CMD（管理员）：
-
-```cmd
-mkdir "%APPDATA%\yazi"
-mklink /D "%APPDATA%\yazi\config" "\path\to\dot-file\yazi"
-```
-
-下次启动 `yazi` 即可加载配置；也可以执行 `yazi --help` 确认安装就绪。
-
-### 7. 链接 komorebi 配置（仅 Windows）
+### 6. 链接 komorebi 配置（仅 Windows）
 
 > komorebi、whkd、yasb 是一套协同工作的 Windows 平铺窗口管理工具链：**komorebi** 负责平铺与管理窗口，**whkd** 提供驱动 komorebi 的全局快捷键，**yasb** 显示工作区 / 活动窗口等状态栏信息。三者仅在 Windows 下可用，需配合使用。
 
@@ -258,7 +221,7 @@ mklink "%USERPROFILE%\applications.json" "\path\to\dot-file\komorebi\application
 
 > 注意：文件符号链接用 `mklink`（不带 `/D`），目录才用 `mklink /D`。链接完成后可执行 `komorebic start --whkd` 启动（whkd 配置见下一节）。
 
-### 8. 链接 whkd 配置（仅 Windows）
+### 7. 链接 whkd 配置（仅 Windows）
 
 whkd 在 `%USERPROFILE%\.config\whkdrc` 查找配置文件（直接位于 `.config` 下，不在子目录中），因此对 `whkdrc` 单个文件创建符号链接：
 
@@ -281,7 +244,7 @@ mklink "%USERPROFILE%\.config\whkdrc" "\path\to\dot-file\whkd\whkdrc"
 
 修改 `whkdrc` 后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
 
-### 9. 链接 yasb 配置（仅 Windows）
+### 8. 链接 yasb 配置（仅 Windows）
 
 yasb 在 `%USERPROFILE%\.config\yasb\` 下查找 `config.yaml` 与 `styles.css`：
 
@@ -304,9 +267,9 @@ mklink /D "%USERPROFILE%\.config\yasb" "\path\to\dot-file\yasb"
 
 `config.yaml` 中已开启 `watch_config` / `watch_stylesheet`，保存后状态栏会自动重载。
 
-### 10. 链接 komorebi-for-mac 配置（仅 macOS）
+### 9. 链接 komorebi-for-mac 配置（仅 macOS）
 
-> komorebi-for-mac 是 komorebi 在 macOS 上的移植，配合 **skhd**（提供驱动 `komorebic` 的全局快捷键）构成 macOS 下的平铺窗管方案，与 Windows 的 komorebi / whkd / yasb 一一对应。两者仅在 macOS 下可用，需配合使用。
+> komorebi-for-mac 是 komorebi 在 macOS 上的移植，配合 **skhd**（提供驱动 `komorebic` 的全局快捷键）构成 macOS 下的平铺窗管方案，与 Windows 的 komorebi / whkd 对应。两者仅在 macOS 下可用，需配合使用。
 
 komorebi-for-mac 从 `~/.config/komorebi/` 读取 `komorebi.json` 与 `applications.json`（后者路径已在 `komorebi.json` 中写死为 `$HOME/.config/komorebi/applications.json`）。本仓库的 `komorebi-for-mac/` 目录恰好包含这两个文件，因此直接将整个目录链接到 `~/.config/komorebi`（注意链接目标名为 `komorebi`，而非 `komorebi-for-mac`）：
 
@@ -318,7 +281,7 @@ ln -s /path/to/dot-file/komorebi-for-mac ~/.config/komorebi
 
 修改配置后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
 
-### 11. 链接 skhd 配置（仅 macOS）
+### 10. 链接 skhd 配置（仅 macOS）
 
 skhd 默认从用户主目录读取 `~/.skhdrc`。本仓库的配置文件位于 `skhd/.skhdrc`，对该单个文件创建符号链接：
 
@@ -328,45 +291,6 @@ ln -s /path/to/dot-file/skhd/.skhdrc ~/.skhdrc
 ```
 
 skhd 会监听配置文件变化并自动重载，保存 `.skhdrc` 后快捷键即时生效。
-
-### 12. 链接 sketchybar 配置并编译 helper（仅 macOS）
-
-> sketchybar 是 macOS 上的状态栏，配合 komorebi-for-mac 显示工作区圆点与聚焦窗口图标，对应 Windows 的 yasb。配置基于 **SbarLua**（Lua 绑定），komorebi 状态由一个常驻 **C++ event provider**（`helper/komorebi_provider`）经 mach 直接推送，取代了早期的 shell 桥接脚本。
-
-sketchybar 从 `~/.config/sketchybar` 读取配置，将整个目录链接过去：
-
-```bash
-mkdir -p ~/.config
-[ -e ~/.config/sketchybar ] && mv ~/.config/sketchybar ~/.config/sketchybar.backup.$(date +%s)
-ln -s /path/to/dot-file/sketchybar ~/.config/sketchybar
-```
-
-helper 的二进制不入库，需本地编译一次（依赖均为 macOS 自带：Xcode Command Line Tools 的 `clang++`、CoreFoundation / CoreGraphics / ImageIO 框架；第三方头文件已 vendored，无需联网）：
-
-```bash
-cd ~/.config/sketchybar/helper
-make
-```
-
-编译产物为 `helper/komorebi_provider` 与 `helper/rime_provider`（后者供下一节「鼠须管中英文状态」使用，由 `make` 一并构建）。sketchybar 启动/重载时，lua 会自动干净重启相应 helper（先 `killall` 再启动），因此 `make` 完成后执行 `sketchybar --reload`（或 `brew services restart sketchybar`）即可生效。修改 C++ 源码后需重新 `make` 并 `sketchybar --reload`。
-
-### 13. 链接鼠须管（Squirrel/Rime）中英文状态导出配置（仅 macOS）
-
-> 在 sketchybar 上显示鼠须管**内部** `ascii_mode`（中文 / 西文）状态——取自输入法运行时的真实内部状态，而非 macOS 输入源切换。原理：一个 librime-lua processor（`lua/ascii_mode_export.lua`）通过 `option_update_notifier` 捕获 `ascii_mode` 变化并原子写入 `~/.cache/rime/ascii_mode`，上一节的 `rime_provider` helper 经 kqueue 监听该文件并经 mach 推送 `rime_ascii_mode_change` 事件给 sketchybar 的 `items/rime.lua` 指示器。
-
-鼠须管的 `~/Library/Rime` 目录含词库、用户词典、语言模型与部署产物，不整目录入库；仅对下列 3 个配置文件创建单文件软链接：
-
-```bash
-mkdir -p ~/Library/Rime/lua
-for f in rime.lua rime_ice.custom.yaml lua/ascii_mode_export.lua; do
-  [ -e ~/Library/Rime/$f ] && [ ! -L ~/Library/Rime/$f ] && mv ~/Library/Rime/$f ~/Library/Rime/$f.backup.$(date +%s)
-  ln -sfn /path/to/dot-file/rime/$f ~/Library/Rime/$f
-done
-```
-
-链接后右键菜单栏鼠须管图标 →「重新部署」（或执行 `"/Library/Input Methods/Squirrel.app/Contents/MacOS/Squirrel" --reload`）加载 processor；再确保已按上一节 `make` 出 `rime_provider` 并 `sketchybar --reload`。切换中英文（Caps Lock / Shift）时状态栏即时跟随。
-
-> `rime_ice.custom.yaml` 是雾凇拼音（rime_ice）方案的 patch 文件，仅在使用该方案时生效；若改用其他方案，需把其中 `engine/processors/@before 0: lua_processor@ascii_mode_export` 这条 patch 同样加到对应方案的 `*.custom.yaml`。
 
 ## 更新与回滚
 
@@ -386,5 +310,4 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm、Yazi，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd、sketchybar、鼠须管中英文状态导出生效，无需重新安装（注意 sketchybar 的 C++ helper 在源码变更后需重新 `make`）。
-
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd 生效，无需重新安装。
