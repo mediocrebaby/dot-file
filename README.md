@@ -1,6 +1,6 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code**、**Neovim**、**WezTerm**，以及跨平台平铺窗口管理 —— Windows 用三件套 **komorebi**、**whkd**、**yasb**，macOS 用 **komorebi-for-mac** + **skhd** —— 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **Claude Code**（skills 与 ccstatusline）、**Neovim**、**WezTerm**，以及跨平台平铺窗口管理 —— Windows 用三件套 **komorebi**、**whkd**、**yasb**，macOS 用 **komorebi-for-mac** + **skhd** —— 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
@@ -11,7 +11,10 @@
 ```
 dot-file/
 ├── claude/               # Claude Code 配置（对应系统目录 ~/.claude/，去掉前导点以便在资源管理器中显示）
-│   └── skills/           # 技能包（committing-changes / grill-me / grill-with-doc / coder）
+│   ├── ccstatusline/     # ccstatusline 状态栏配置（模型、git 信息、上下文 / 用量进度、重置倒计时）
+│   │   └── settings.json # 状态栏布局与显示选项
+│   └── skills/           # 技能包（coder / committing-changes / grill-me / grill-with-doc / codebase-memory）
+│       ├── codebase-memory/      # 使用代码库知识图谱进行结构化代码查询、调用追踪、影响分析
 │       ├── coder/                # 编码行为准则：避免过度设计、外科手术式改动、显式陈述假设、定义可验证的成功标准
 │       ├── committing-changes/   # 分析 git 改动并生成提交
 │       ├── grill-me/             # 对模糊需求进行严格盘问，达成共识
@@ -52,7 +55,7 @@ dot-file/
 ├── skhd/                 # skhd 热键守护进程配置（仅 macOS）
 │   └── .skhdrc           # 快捷键绑定（alt 系列，驱动 komorebic）
 ├── .gitattributes        # 强制文本文件以 LF 入库，避免多机换行符 diff
-├── .gitignore            # 忽略 macOS、编辑器、日志与本机覆盖等文件
+├── .gitignore            # 忽略 macOS、编辑器、日志、本机覆盖、.spec 与内置 / 不通用 skill 等文件
 └── README.md
 ```
 
@@ -106,7 +109,37 @@ mklink /D "%USERPROFILE%\.claude\skills" "\path\to\dot-file\claude\skills"
 
 完成后重启 Claude Code 会话生效。技能目录会被 Claude Code 自动加载，按需调用对应 skill 即可。
 
-### 3. 链接 Neovim 配置
+### 3. 链接 Claude Code ccstatusline 配置
+
+`ccstatusline` 的配置位于 `~/.claude/ccstatusline/settings.json`。将本仓库 `claude/ccstatusline` 链接过去后，状态栏会显示当前模型、git 仓库 / 分支 / 改动数量、上下文用量、会话 / 周用量进度与重置倒计时。
+
+#### macOS / Linux
+
+```bash
+[ -e ~/.claude/ccstatusline ] && mv ~/.claude/ccstatusline ~/.claude/ccstatusline.backup.$(date +%s)
+ln -s /path/to/dot-file/claude/ccstatusline ~/.claude/ccstatusline
+```
+
+#### Windows
+
+PowerShell（管理员）：
+
+```powershell
+$src = "\path\to\dot-file\claude\ccstatusline"
+$dst = "$env:USERPROFILE\.claude\ccstatusline"
+if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
+New-Item -ItemType SymbolicLink -Path $dst -Target $src
+```
+
+CMD（管理员）：
+
+```cmd
+mklink /D "%USERPROFILE%\.claude\ccstatusline" "\path\to\dot-file\claude\ccstatusline"
+```
+
+完成后重启 Claude Code 会话，或重新加载 `ccstatusline`。
+
+### 4. 链接 Neovim 配置
 
 #### macOS / Linux
 
@@ -139,7 +172,7 @@ mklink /D "%LOCALAPPDATA%\nvim" "\path\to\dot-file\nvim"
 
 首次启动 `nvim` 时 lazy.nvim 会自动安装插件，等待安装完成即可。C#（.NET）相关扩展仅在检测到系统存在 `dotnet` 命令时才加载，未装 .NET SDK 的机器会静默跳过。`lazy-lock.json`、`lazyvim.json` 各机各异，已在 `nvim/.gitignore` 中忽略，不随仓库同步。
 
-### 4. 链接 WezTerm 配置
+### 5. 链接 WezTerm 配置
 
 #### macOS / Linux
 
@@ -174,7 +207,7 @@ mklink /D "%USERPROFILE%\.config\wezterm" "path\to\dot-file\wezterm"
 
 重启 WezTerm 或按 `Ctrl+Shift+R` 重新加载配置。
 
-### 5. WezTerm 本机覆盖（每台设备独有的设置）
+### 6. WezTerm 本机覆盖（每台设备独有的设置）
 
 字号、WSL distro 这种“每台机器最优值不一样”的字段，通过 `wezterm/local.lua` 覆盖（`wezterm/utils/local_config.lua` 会尝试加载它，缺失时静默跳过）。该文件已被 `.gitignore`，不会同步到其他设备。
 
@@ -195,7 +228,7 @@ return {
 }
 ```
 
-### 6. 链接 komorebi 配置（仅 Windows）
+### 7. 链接 komorebi 配置（仅 Windows）
 
 > komorebi、whkd、yasb 是一套协同工作的 Windows 平铺窗口管理工具链：**komorebi** 负责平铺与管理窗口，**whkd** 提供驱动 komorebi 的全局快捷键，**yasb** 显示工作区 / 活动窗口等状态栏信息。三者仅在 Windows 下可用，需配合使用。
 
@@ -221,7 +254,7 @@ mklink "%USERPROFILE%\applications.json" "\path\to\dot-file\komorebi\application
 
 > 注意：文件符号链接用 `mklink`（不带 `/D`），目录才用 `mklink /D`。链接完成后可执行 `komorebic start --whkd` 启动（whkd 配置见下一节）。
 
-### 7. 链接 whkd 配置（仅 Windows）
+### 8. 链接 whkd 配置（仅 Windows）
 
 whkd 在 `%USERPROFILE%\.config\whkdrc` 查找配置文件（直接位于 `.config` 下，不在子目录中），因此对 `whkdrc` 单个文件创建符号链接：
 
@@ -244,7 +277,7 @@ mklink "%USERPROFILE%\.config\whkdrc" "\path\to\dot-file\whkd\whkdrc"
 
 修改 `whkdrc` 后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
 
-### 8. 链接 yasb 配置（仅 Windows）
+### 9. 链接 yasb 配置（仅 Windows）
 
 yasb 在 `%USERPROFILE%\.config\yasb\` 下查找 `config.yaml` 与 `styles.css`：
 
@@ -267,7 +300,7 @@ mklink /D "%USERPROFILE%\.config\yasb" "\path\to\dot-file\yasb"
 
 `config.yaml` 中已开启 `watch_config` / `watch_stylesheet`，保存后状态栏会自动重载。
 
-### 9. 链接 komorebi-for-mac 配置（仅 macOS）
+### 10. 链接 komorebi-for-mac 配置（仅 macOS）
 
 > komorebi-for-mac 是 komorebi 在 macOS 上的移植，配合 **skhd**（提供驱动 `komorebic` 的全局快捷键）构成 macOS 下的平铺窗管方案，与 Windows 的 komorebi / whkd 对应。两者仅在 macOS 下可用，需配合使用。
 
@@ -281,7 +314,7 @@ ln -s /path/to/dot-file/komorebi-for-mac ~/.config/komorebi
 
 修改配置后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
 
-### 10. 链接 skhd 配置（仅 macOS）
+### 11. 链接 skhd 配置（仅 macOS）
 
 skhd 默认从用户主目录读取 `~/.skhdrc`。本仓库的配置文件位于 `skhd/.skhdrc`，对该单个文件创建符号链接：
 
@@ -310,4 +343,4 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code、Neovim、WezTerm，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code skills / ccstatusline、Neovim、WezTerm，以及 Windows 的 komorebi、whkd、yasb 和 macOS 的 komorebi-for-mac、skhd 生效，无需重新安装。
