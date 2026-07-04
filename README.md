@@ -1,6 +1,6 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code**（skills 与 ccstatusline）、**Neovim**、**WezTerm**，以及 Windows 平铺窗口管理三件套 **komorebi**、**whkd**、**yasb** 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **Claude Code**（skills 与 ccstatusline）、**Neovim**、**WezTerm** 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
@@ -41,14 +41,6 @@ dot-file/
 │   ├── utils/            # 工具模块（platform 平台判断、local_config 本机覆盖加载）
 │   ├── img/              # 效果图等静态资源
 │   └── local.lua.example # 本机覆盖配置示例（字号、WSL distro）
-├── komorebi/             # komorebi 平铺窗口管理器配置（仅 Windows）
-│   ├── komorebi.json     # 主配置（BSP 布局、边框、工作区、窗口动画）
-│   └── applications.json # 应用特定规则（按应用定制窗口行为）
-├── whkd/                 # whkd 热键守护进程配置（仅 Windows）
-│   └── whkdrc            # 快捷键绑定（alt 系列，驱动 komorebic）
-├── yasb/                 # yasb 状态栏配置（仅 Windows）
-│   ├── config.yaml       # 状态栏布局与组件
-│   └── styles.css        # 状态栏样式
 ├── .gitattributes        # 强制文本文件以 LF 入库，避免多机换行符 diff
 ├── .gitignore            # 忽略 macOS、编辑器、日志、本机覆盖、.spec 与内置 / 不通用 skill 等文件
 └── README.md
@@ -223,78 +215,6 @@ return {
 }
 ```
 
-### 7. 链接 komorebi 配置（仅 Windows）
-
-> komorebi、whkd、yasb 是一套协同工作的 Windows 平铺窗口管理工具链：**komorebi** 负责平铺与管理窗口，**whkd** 提供驱动 komorebi 的全局快捷键，**yasb** 显示工作区 / 活动窗口等状态栏信息。三者仅在 Windows 下可用，需配合使用。
-
-与其他工具不同，komorebi 默认从用户主目录读取两个散文件 `%USERPROFILE%\komorebi.json` 和 `%USERPROFILE%\applications.json`（后者路径已在 `komorebi.json` 中写死为 `$Env:USERPROFILE/applications.json`），因此分别为这两个文件创建符号链接：
-
-PowerShell（管理员）：
-
-```powershell
-$repo = "\path\to\dot-file"
-foreach ($f in "komorebi.json", "applications.json") {
-    $dst = "$env:USERPROFILE\$f"
-    if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
-    New-Item -ItemType SymbolicLink -Path $dst -Target "$repo\komorebi\$f"
-}
-```
-
-CMD（管理员）：
-
-```cmd
-mklink "%USERPROFILE%\komorebi.json" "\path\to\dot-file\komorebi\komorebi.json"
-mklink "%USERPROFILE%\applications.json" "\path\to\dot-file\komorebi\applications.json"
-```
-
-> 注意：文件符号链接用 `mklink`（不带 `/D`），目录才用 `mklink /D`。链接完成后可执行 `komorebic start --whkd` 启动（whkd 配置见下一节）。
-
-### 8. 链接 whkd 配置（仅 Windows）
-
-whkd 在 `%USERPROFILE%\.config\whkdrc` 查找配置文件（直接位于 `.config` 下，不在子目录中），因此对 `whkdrc` 单个文件创建符号链接：
-
-PowerShell（管理员）：
-
-```powershell
-$src = "\path\to\dot-file\whkd\whkdrc"
-$dst = "$env:USERPROFILE\.config\whkdrc"
-New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
-if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
-New-Item -ItemType SymbolicLink -Path $dst -Target $src
-```
-
-CMD（管理员）：
-
-```cmd
-mkdir "%USERPROFILE%\.config"
-mklink "%USERPROFILE%\.config\whkdrc" "\path\to\dot-file\whkd\whkdrc"
-```
-
-修改 `whkdrc` 后执行 `komorebic reload-configuration`（或快捷键 `alt + shift + o`）即可重载。
-
-### 9. 链接 yasb 配置（仅 Windows）
-
-yasb 在 `%USERPROFILE%\.config\yasb\` 下查找 `config.yaml` 与 `styles.css`：
-
-PowerShell（管理员）：
-
-```powershell
-$src = "\path\to\dot-file\yasb"
-$dst = "$env:USERPROFILE\.config\yasb"
-New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
-if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
-New-Item -ItemType SymbolicLink -Path $dst -Target $src
-```
-
-CMD（管理员）：
-
-```cmd
-mkdir "%USERPROFILE%\.config"
-mklink /D "%USERPROFILE%\.config\yasb" "\path\to\dot-file\yasb"
-```
-
-`config.yaml` 中已开启 `watch_config` / `watch_stylesheet`，保存后状态栏会自动重载。
-
 ## 更新与回滚
 
 ```bash
@@ -313,4 +233,4 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code skills / ccstatusline、Neovim、WezTerm，以及 Windows 的 komorebi、whkd、yasb 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 Claude Code skills / ccstatusline、Neovim、WezTerm 生效，无需重新安装。
