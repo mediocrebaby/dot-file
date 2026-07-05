@@ -9,7 +9,12 @@ function M.apply(config)
 	config.webgpu_power_preference = "HighPerformance"
 
 	--- 窗口样式 ---
-	config.window_decorations = "RESIZE"
+  if platform.is_macos() then
+    config.window_decorations = "TITLE | RESIZE | MACOS_USE_BACKGROUND_COLOR_AS_TITLEBAR_COLOR "
+  elseif platform.is_windows() then
+    config.window_decorations = "TITLE | RESIZE"
+    config.win32_caption_color = "auto"
+  end
 	config.window_frame = {
 		active_titlebar_bg = "#090909",
 		inactive_titlebar_bg = "#090909",
