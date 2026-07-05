@@ -14,6 +14,7 @@ function M.apply(config)
   config.cursor_smear_duration_ms = 150
   config.cursor_thickness = 2
   config.cursor_trail_size = 1.0
+  config.animation_fps = 60
 end
 
 return M
