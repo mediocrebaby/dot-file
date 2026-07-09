@@ -1,11 +1,18 @@
 ---
-  ## name: codebase-memory
-  description: 使用代码库知识图谱进行结构化代码查询。触发场景：探索代码库、理解架构、有哪些函数、展示结构、谁调用了这个函数、X 调用了什么、追踪调用链、查找调用方、展示依赖、影响分析、死代码、未使用函数、高扇出、重构候选、代码质量审计、图查询语法、Cypher 查询示例、边类型、如何使用 search_graph。
+name: codebase-memory
+description: 用知识图谱查询代码库结构（search_graph/trace_path/query_graph 等 MCP 工具），返回精确结果约 500 token，等效 grep 约需 80K token。触发即调用，先于 Read/Grep/Glob——不要因为"看起来 grep 一下就够了"而跳过。TRIGGER：面对任何已有代码库的第一步探索；用户说"看看这个项目/这是干嘛的/讲下架构/代码怎么组织的/带我熟悉一下"；动手改代码前需要摸清相关模块；定位符号（X 定义在哪、有哪些函数/类/接口/handler/路由）；调用关系（谁调用了 X、X 调用了什么、调用链、依赖、跨服务 HTTP 调用）；影响分析（改这里会波及谁、git diff 影响了哪些符号）；代码质量（死代码、未使用函数、高扇入/扇出、重构候选、审计）；以及 search_graph/query_graph 用法、Cypher 示例、边类型。SKIP：目标文件路径已明确且只需读单个文件；非代码仓库（纯文档/配置）。
 ---
 
 # Codebase Memory — 知识图谱工具
 
   图工具可以返回精确的结构化结果，约 500 个 token；相比之下，使用 grep 可能需要约 80K 个 token。
+
+## 使用时机：先于 Read/Grep/Glob
+
+  接触一个已有代码库时，第一个动作是 `list_projects` 确认索引状态，而不是 Grep：
+
+- 已索引 → 直接用图工具定位符号与关系，拿到 qualified_name 后再 `get_code_snippet` 读源码
+- 未索引 → 询问用户是否执行 `index_repository`；用户拒绝则退回 Grep/Glob
 
 ## 快速决策矩阵
 
@@ -73,4 +80,4 @@
 2. `query_graph` 最多返回 200 行；如需计数，请使用带度数过滤的 `search_graph`。
 3. `trace_path` 需要精确名称；请先使用 `search_graph(name_pattern=...)`。
 4. `direction="outbound"` 会漏掉跨服务调用方；请使用 `direction="both"`。
-5. 结果默认每页 10 条；请检查 `has_more` 并使用 `offset`。-
+5. 结果默认每页 10 条；请检查 `has_more` 并使用 `offset`。
