@@ -46,6 +46,17 @@ local function cwd_uri_to_windows_path(cwd_uri)
 	return path
 end
 
+local function cwd_uri_to_posix_path(cwd_uri)
+	if not cwd_uri then return nil end
+	local uri = tostring(cwd_uri)
+	if not uri:match("^file:") then return nil end
+
+	local path = uri:match("^file://[^/]*(/.*)$") or uri:match("^file:(/.*)$")
+	if not path then return nil end
+
+	return url_decode(path)
+end
+
 local function cwd_uri_to_unix_path(cwd_uri, distro)
 	if not cwd_uri then return nil end
 	local uri = tostring(cwd_uri)
@@ -118,7 +129,10 @@ local function get_current_dir_for_domain(pane, domain_name)
 	end
 
 	if domain_name == "local" then
-		return cwd_uri_to_windows_path(cwd_uri)
+		if platform.is_windows() then
+			return cwd_uri_to_windows_path(cwd_uri)
+		end
+		return cwd_uri_to_posix_path(cwd_uri)
 	end
 
 	return nil
