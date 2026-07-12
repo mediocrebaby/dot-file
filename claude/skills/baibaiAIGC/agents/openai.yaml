@@ -1,0 +1,7 @@
+interface:
+  display_name: "baibaiAIGC"
+  short_description: "多轮降 AIGC 改写 skill，支持中文两轮与英文单轮"
+  default_prompt: "Use $baibaiaigc to 对当前论文或技术文本执行当前应执行的一轮降 AIGC 改写，并按记录衔接后续轮次。"
+
+policy:
+  allow_implicit_invocation: true
