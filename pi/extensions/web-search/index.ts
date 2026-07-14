@@ -1,8 +1,6 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Type } from "typebox";
 import { Text } from "@mariozechner/pi-tui";
-import * as fs from "node:fs";
-import * as path from "node:path";
 
 interface SearchResult {
 	title: string;
@@ -26,59 +24,66 @@ interface BuiltSearchQuery {
 	site?: string;
 }
 
-async function googleSearch(
-	query: string,
-	count: number,
-	apiKey: string,
-	cseId: string,
-	signal?: AbortSignal,
-): Promise<SearchResult[]> {
-	const num = Math.min(count, 10);
-	const url = new URL("https://www.googleapis.com/customsearch/v1");
-	url.searchParams.set("key", apiKey);
-	url.searchParams.set("cx", cseId);
-	url.searchParams.set("q", query);
-	url.searchParams.set("num", String(num));
-
-	const resp = await fetch(url.toString(), { signal });
-	if (!resp.ok) {
-		const body = await resp.text();
-		throw new Error(`Google API ${resp.status}: ${body.slice(0, 200)}`);
-	}
-
-	const data = (await resp.json()) as {
-		items?: Array<{
-			title: string;
-			link: string;
-			snippet?: string;
-		}>;
-	};
-
-	if (!data.items || data.items.length === 0) return [];
-
-	return data.items.map((item) => ({
-		title: item.title,
-		url: item.link,
-		snippet: item.snippet?.replace(/\n/g, " ") ?? "",
-	}));
+function decodeEntities(text: string): string {
+	return text
+		.replace(/<[^>]+>/g, "")
+		.replace(/&amp;/g, "&")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&quot;/g, '"')
+		.replace(/&#x27;/g, "'")
+		.replace(/&#39;/g, "'")
+		.replace(/&nbsp;/g, " ")
+		.replace(/\s+/g, " ")
+		.trim();
 }
 
-const EXT_DIR = path.dirname(new URL(import.meta.url).pathname);
-const AUTH_PATH = path.join(EXT_DIR, "auth.json");
-
-function loadCredentials(): { apiKey: string; cseId: string } | null {
-	const envApiKey = process.env.GOOGLE_SEARCH_API_KEY ?? process.env.GOOGLE_API_KEY;
-	const envCseId = process.env.GOOGLE_CSE_ID ?? process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID;
-	if (envApiKey && envCseId) return { apiKey: envApiKey, cseId: envCseId };
-
-	if (!fs.existsSync(AUTH_PATH)) return null;
+function resolveDuckUrl(href: string): string {
+	let url = href.startsWith("//") ? `https:${href}` : href;
 	try {
-		const config = JSON.parse(fs.readFileSync(AUTH_PATH, "utf-8"));
-		const apiKey = config.google_search_api_key as string;
-		const cseId = config.google_cse_id as string;
-		if (apiKey && cseId) return { apiKey, cseId };
+		const uddg = new URL(url).searchParams.get("uddg");
+		if (uddg) return uddg;
 	} catch {}
-	return null;
+	return url;
+}
+
+async function duckDuckGoSearch(
+	query: string,
+	count: number,
+	signal?: AbortSignal,
+): Promise<SearchResult[]> {
+	const url = new URL("https://html.duckduckgo.com/html/");
+	url.searchParams.set("q", query);
+	const resp = await fetch(url, {
+		headers: {
+			"User-Agent":
+				"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+		},
+		signal,
+	});
+	if (!resp.ok) {
+		throw new Error(`DuckDuckGo ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+	}
+
+	const html = await resp.text();
+	const linkRe =
+		/<a[^>]*class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+	const snippetRe = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+
+	const snippets: string[] = [];
+	for (let m = snippetRe.exec(html); m; m = snippetRe.exec(html)) {
+		snippets.push(decodeEntities(m[1]));
+	}
+
+	const results: SearchResult[] = [];
+	for (let m = linkRe.exec(html); m && results.length < count; m = linkRe.exec(html)) {
+		results.push({
+			title: decodeEntities(m[2]),
+			url: resolveDuckUrl(m[1]),
+			snippet: snippets[results.length] ?? "",
+		});
+	}
+	return results;
 }
 
 function formatResults(results: SearchResult[]): string {
@@ -166,7 +171,7 @@ export default function (pi: ExtensionAPI) {
 		name: "web_search",
 		label: "Web Search",
 		description:
-			"Search the web via Google Custom Search API. Build one search per call from a base query string, exact phrases, exclusions, and an optional site. Returns title, URL, and snippet.",
+			"Search the web via DuckDuckGo. Build one search per call from a base query string, exact phrases, exclusions, and an optional site. Returns title, URL, and snippet.",
 		promptSnippet:
 			"Search the web via a query string plus optional exactPhrases, excludeTerms, and site. Use one tool call per search angle.",
 		promptGuidelines: [
@@ -184,7 +189,7 @@ export default function (pi: ExtensionAPI) {
 			exactPhrases: Type.Optional(
 				Type.Array(Type.String(), {
 					description:
-						"Exact phrases to match. Each item becomes a quoted phrase in the final Google query.",
+						"Exact phrases to match. Each item becomes a quoted phrase in the final search query.",
 				}),
 			),
 			excludeTerms: Type.Optional(
@@ -209,22 +214,9 @@ export default function (pi: ExtensionAPI) {
 		}),
 
 		async execute(_toolCallId, params: StructuredSearchArgs, signal) {
-			const creds = loadCredentials();
-			if (!creds) {
-				throw new Error(
-					`Missing Google Custom Search credentials. Set GOOGLE_SEARCH_API_KEY and GOOGLE_CSE_ID, or create ${AUTH_PATH} from auth.example.json. Get credentials from https://developers.google.com/custom-search/v1/introduction`,
-				);
-			}
-
 			const count = params.count ?? 5;
 			const built = buildSearchQuery(params);
-			const results = await googleSearch(
-				built.query,
-				count,
-				creds.apiKey,
-				creds.cseId,
-				signal,
-			);
+			const results = await duckDuckGoSearch(built.query, count, signal);
 
 			return {
 				content: [
