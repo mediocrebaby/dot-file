@@ -38,3 +38,7 @@ generate-hardware-markdown/
 
 # 忽略 .spec
 .spec/
+
+# 忽略 pi 扩展中的 node_modules
+node_modules/
+auth.json
