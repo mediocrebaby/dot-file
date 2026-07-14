@@ -1,5 +1,16 @@
 return {
   {
+    -- LazyVim 的 Markdown extra 默认启用 markdownlint-cli2。
+    -- 清空 Markdown 的 linter，禁用语法检查，同时保留渲染、预览和 LSP 功能。
+    "mfussenegger/nvim-lint",
+    optional = true,
+    opts = function(_, opts)
+      opts.linters_by_ft = opts.linters_by_ft or {}
+      opts.linters_by_ft.markdown = nil
+      opts.linters_by_ft["markdown.mdx"] = nil
+    end,
+  },
+  {
     -- markview.nvim：在缓冲区内直接美化渲染 markdown（标题、列表、代码块、表格等）。
     -- 纯渲染插件，不带 LSP/lint；编辑增强类功能不在此插件职责内。
     "OXY2DEV/markview.nvim",
