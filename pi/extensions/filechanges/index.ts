@@ -432,23 +432,55 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				const md = "```diff\n" + (t.diff.trimEnd() || "(no diff)") + "\n```";
+				const HEIGHT_FRACTION = 0.85;
 				await ctx.ui.custom<void>((tui, theme, _kb, done) => {
-					const container = new Container();
-					container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
-					container.addChild(new Text(theme.fg("accent", theme.bold(t.displayPath)), 1, 0));
-					container.addChild(new Markdown(md, 1, 0, getMarkdownTheme()));
-					container.addChild(new Text(theme.fg("dim", "esc to go back"), 1, 0));
-					container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
+					const markdown = new Markdown(md, 1, 0, getMarkdownTheme());
+					let scroll = 0;
+					let lastMaxScroll = 0;
+					let lastPage = 1;
+
+					const panelRows = () =>
+						Math.min(tui.terminal.rows, Math.max(6, Math.floor(tui.terminal.rows * HEIGHT_FRACTION)));
 
 					return {
-						render: (w) => container.render(w),
-						invalidate: () => container.invalidate(),
+						render: (w) => {
+							const allLines = markdown.render(w);
+							const total = allLines.length;
+							// chrome = top border + title + footer + bottom border
+							const bodyHeight = Math.min(Math.max(1, panelRows() - 4), total);
+							const maxScroll = Math.max(0, total - bodyHeight);
+							if (scroll > maxScroll) scroll = maxScroll;
+							if (scroll < 0) scroll = 0;
+							lastMaxScroll = maxScroll;
+							lastPage = Math.max(1, bodyHeight - 1);
+
+							const window = allLines.slice(scroll, scroll + bodyHeight);
+							const border = theme.fg("accent", "─".repeat(Math.max(1, w)));
+							const title = " " + theme.fg("accent", theme.bold(t.displayPath));
+							const hint =
+								maxScroll > 0
+									? `↑↓/PgUp/PgDn/g/G scroll • esc back   ${scroll + 1}-${scroll + bodyHeight}/${total}`
+									: "esc to go back";
+							return [border, title, ...window, " " + theme.fg("dim", hint), border];
+						},
+						invalidate: () => markdown.invalidate(),
 						handleInput: (data) => {
-							if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) done();
-							else tui.requestRender();
+							if (matchesKey(data, Key.escape) || matchesKey(data, Key.ctrl("c"))) {
+								done();
+								return;
+							}
+							if (matchesKey(data, Key.up) || matchesKey(data, "k")) scroll -= 1;
+							else if (matchesKey(data, Key.down) || matchesKey(data, "j")) scroll += 1;
+							else if (matchesKey(data, Key.pageUp)) scroll -= lastPage;
+							else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.space)) scroll += lastPage;
+							else if (matchesKey(data, Key.home) || matchesKey(data, "g")) scroll = 0;
+							else if (matchesKey(data, Key.end) || matchesKey(data, Key.shift("g"))) scroll = lastMaxScroll;
+							if (scroll < 0) scroll = 0;
+							if (scroll > lastMaxScroll) scroll = lastMaxScroll;
+							tui.requestRender();
 						},
 					};
-				}, { overlay: true });
+				}, { overlay: true, overlayOptions: { width: "90%" } });
 
 				// After closing diff, loop back to the modification log.
 			}
