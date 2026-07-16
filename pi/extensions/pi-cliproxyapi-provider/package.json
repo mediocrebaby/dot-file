@@ -1,0 +1,8 @@
+{
+	"name": "pi-cliproxyapi-provider",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": ["./index.ts"]
+	}
+}
