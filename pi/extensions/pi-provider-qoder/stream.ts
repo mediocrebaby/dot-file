@@ -223,8 +223,7 @@ export function streamQoder(
       };
 
       const bodyBytes = Buffer.from(JSON.stringify(reqBody));
-      const encodedBody = qoderEncodeBody(bodyBytes);
-      const encodedBytes = Buffer.from(encodedBody, "utf8");
+      const encodedBytes = await qoderEncodeBody(bodyBytes);
 
       const chatURL = getQoderChatURL(providerMode);
 
