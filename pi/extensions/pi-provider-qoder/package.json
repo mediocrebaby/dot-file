@@ -1,0 +1,8 @@
+{
+	"name": "pi-provider-qoder",
+	"private": true,
+	"type": "module",
+	"pi": {
+		"extensions": ["./index.ts"]
+	}
+}
