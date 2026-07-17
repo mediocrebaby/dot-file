@@ -401,7 +401,7 @@ export default function (pi: ExtensionAPI) {
 					container.addChild(list);
 
 					container.addChild(
-						new Text(theme.fg("dim", "↑↓ navigate • enter select • esc close"), 1, 0)
+						new Text(theme.fg("dim", "↑↓/j/k navigate • enter select • esc close"), 1, 0)
 					);
 					container.addChild(new DynamicBorder((s: string) => theme.fg("accent", s)));
 
@@ -409,7 +409,9 @@ export default function (pi: ExtensionAPI) {
 						render: (w) => container.render(w),
 						invalidate: () => container.invalidate(),
 						handleInput: (data) => {
-							list.handleInput(data);
+							if (matchesKey(data, "j")) list.handleInput("\x1b[B");
+							else if (matchesKey(data, "k")) list.handleInput("\x1b[A");
+							else list.handleInput(data);
 							tui.requestRender();
 						},
 					};
