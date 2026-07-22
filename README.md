@@ -1,50 +1,10 @@
 # dot-file
 
-个人 dotfiles 仓库，集中管理 **Claude Code**（skills 与 ccstatusline）、**Neovim**、**WezTerm** 的配置，便于在多台机器之间同步、备份与回滚。
+个人 dotfiles 仓库，集中管理 **pi 编码代理**（扩展与技能）、**Neovim**、**WezTerm** 的配置，便于在多台机器之间同步、备份与回滚。
 
 ## 效果展示
 
 ![WezTerm 终端效果](wezterm/img/PixPin_2026-04-21_00-51-30.png)
-
-## 目录结构
-
-```
-dot-file/
-├── claude/               # Claude Code 配置（对应系统目录 ~/.claude/，去掉前导点以便在资源管理器中显示）
-│   ├── ccstatusline/     # ccstatusline 状态栏配置（模型、git 信息、上下文 / 用量进度、重置倒计时）
-│   │   └── settings.json # 状态栏布局与显示选项
-│   └── skills/           # 技能包（coder / committing-changes / grill-me / grill-with-doc / codebase-memory）
-│       ├── codebase-memory/      # 使用代码库知识图谱进行结构化代码查询、调用追踪、影响分析
-│       ├── coder/                # 编码行为准则：避免过度设计、外科手术式改动、显式陈述假设、定义可验证的成功标准
-│       ├── committing-changes/   # 分析 git 改动并生成提交
-│       ├── grill-me/             # 对模糊需求进行严格盘问，达成共识
-│       └── grill-with-doc/       # 结合领域模型 / 文档压力测试计划（含 CONTEXT.md、ADR 格式模板）
-├── nvim/                 # Neovim 配置（基于 LazyVim，Lua 模块化）
-│   ├── init.lua          # 入口文件，加载 config.lazy
-│   ├── lua/config/       # 核心配置：lazy.lua（插件引导 + 按需加载 dotnet extra）、options / keymaps / autocmds
-│   ├── lua/plugins/      # 自定义插件覆盖：claudecode / colorscheme(tokyonight) / markdown(markview) / oil
-│   ├── lua/utils/        # 工具模块：platform.lua（判断 Windows/macOS/Linux/WSL、探测可执行命令）
-│   ├── snippets/         # 个人代码片段（friendly-snippets 格式，当前含 markdown）
-│   ├── stylua.toml       # StyLua 格式化规则（2 空格缩进、行宽 120）
-│   ├── .neoconf.json     # neoconf.nvim / lua_ls LSP 设置
-│   └── .gitignore        # 忽略 lazy-lock.json / lazyvim.json 等各机各异、不宜共享的文件
-├── wezterm/              # WezTerm 终端模拟器配置（Lua 模块化）
-│   ├── wezterm.lua       # 入口文件，组装各子模块
-│   ├── appearance.lua    # 配色与窗口外观
-│   ├── background.lua    # 背景图片
-│   ├── font.lua          # 字体与字号
-│   ├── keybindings.lua   # 快捷键与鼠标绑定
-│   ├── shell.lua         # 默认 shell 与启动参数
-│   ├── domains.lua       # SSH / Unix / WSL 域
-│   ├── events.lua        # 自定义事件回调
-│   ├── advanced.lua      # 其他高级选项
-│   ├── utils/            # 工具模块（platform 平台判断、local_config 本机覆盖加载）
-│   ├── img/              # 效果图等静态资源
-│   └── local.lua.example # 本机覆盖配置示例（字号、WSL distro）
-├── .gitattributes        # 强制文本文件以 LF 入库，避免多机换行符 diff
-├── .gitignore            # 忽略 macOS、编辑器、日志、本机覆盖、.spec 与内置 / 不通用 skill 等文件
-└── README.md
-```
 
 ## 使用方法
 
@@ -66,15 +26,16 @@ git clone <your-remote-url> \path\to\dot-file
 cd \path\to\dot-file
 ```
 
-### 2. 链接 Claude Code Skills 配置
+### 2. 链接 pi 扩展目录
 
-Claude Code 在 `~/.claude/skills/` 下加载技能。将本仓库 `claude/skills` 链接过去：
+pi 会在启动时扫描 `~/.pi/agent/extensions/` 下的每个子目录并加载其扩展。将本仓库 `pi/extensions` 链接过去即可让所有扩展一次生效。
 
 #### macOS / Linux
 
 ```bash
-[ -e ~/.claude/skills ] && mv ~/.claude/skills ~/.claude/skills.backup.$(date +%s)
-ln -s /path/to/dot-file/claude/skills ~/.claude/skills
+mkdir -p ~/.pi/agent
+[ -e ~/.pi/agent/extensions ] && mv ~/.pi/agent/extensions ~/.pi/agent/extensions.backup.$(date +%s)
+ln -s /path/to/dot-file/pi/extensions ~/.pi/agent/extensions
 ```
 
 #### Windows
@@ -82,8 +43,9 @@ ln -s /path/to/dot-file/claude/skills ~/.claude/skills
 > ⚠️ Windows 创建符号链接需要**管理员权限**，或在「设置 → 系统 → 开发者选项」中开启 **开发者模式**。推荐使用 PowerShell（以管理员身份运行）。
 
 ```powershell
-$src = "\path\to\dot-file\claude\skills"
-$dst = "$env:USERPROFILE\.claude\skills"
+$src = "\path\to\dot-file\pi\extensions"
+$dst = "$env:USERPROFILE\.pi\agent\extensions"
+New-Item -ItemType Directory -Force -Path (Split-Path $dst) | Out-Null
 if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
 New-Item -ItemType SymbolicLink -Path $dst -Target $src
 ```
@@ -91,20 +53,31 @@ New-Item -ItemType SymbolicLink -Path $dst -Target $src
 CMD（管理员）等价写法：
 
 ```cmd
-mklink /D "%USERPROFILE%\.claude\skills" "\path\to\dot-file\claude\skills"
+mklink /D "%USERPROFILE%\.pi\agent\extensions" "\path\to\dot-file\pi\extensions"
 ```
 
-完成后重启 Claude Code 会话生效。技能目录会被 Claude Code 自动加载，按需调用对应 skill 即可。
+#### 安装扩展依赖
 
-### 3. 链接 Claude Code ccstatusline 配置
+`filechanges` 与 `web-fetch` 依赖 npm 包（如 `diff`、`@mozilla/readability`、`linkedom`、`turndown`、`unpdf`），`node_modules` 已被 `.gitignore`，需要在各自目录里跑一次 `npm install`：
 
-`ccstatusline` 的配置位于 `~/.claude/ccstatusline/settings.json`。将本仓库 `claude/ccstatusline` 链接过去后，状态栏会显示当前模型、git 仓库 / 分支 / 改动数量、上下文用量、会话 / 周用量进度与重置倒计时。
+```bash
+cd pi/extensions/filechanges && npm install
+cd ../web-fetch && npm install
+```
+
+其余扩展（`pi-notify`、`pi-provider-qoder`、`pi-system-prompt`、`prompt-history`、`web-search`）纯 TypeScript，无外部依赖，链接完就能用。
+
+完成后在 pi 中执行 `/reload`（或重启会话）生效。Qoder provider 首次使用需运行 `/login qoder`（全球）或 `/login qoder-cn`（国内）；详见 `pi/extensions/pi-provider-qoder/README.md`。
+
+### 3. 链接 pi 技能目录
+
+pi 在 `~/.pi/agent/skills/` 下加载技能，每个子目录一个 `SKILL.md`。将本仓库 `pi/skills` 链接过去：
 
 #### macOS / Linux
 
 ```bash
-[ -e ~/.claude/ccstatusline ] && mv ~/.claude/ccstatusline ~/.claude/ccstatusline.backup.$(date +%s)
-ln -s /path/to/dot-file/claude/ccstatusline ~/.claude/ccstatusline
+[ -e ~/.pi/agent/skills ] && mv ~/.pi/agent/skills ~/.pi/agent/skills.backup.$(date +%s)
+ln -s /path/to/dot-file/pi/skills ~/.pi/agent/skills
 ```
 
 #### Windows
@@ -112,8 +85,8 @@ ln -s /path/to/dot-file/claude/ccstatusline ~/.claude/ccstatusline
 PowerShell（管理员）：
 
 ```powershell
-$src = "\path\to\dot-file\claude\ccstatusline"
-$dst = "$env:USERPROFILE\.claude\ccstatusline"
+$src = "\path\to\dot-file\pi\skills"
+$dst = "$env:USERPROFILE\.pi\agent\skills"
 if (Test-Path $dst) { Rename-Item $dst "$dst.backup.$(Get-Date -UFormat %s)" }
 New-Item -ItemType SymbolicLink -Path $dst -Target $src
 ```
@@ -121,10 +94,10 @@ New-Item -ItemType SymbolicLink -Path $dst -Target $src
 CMD（管理员）：
 
 ```cmd
-mklink /D "%USERPROFILE%\.claude\ccstatusline" "\path\to\dot-file\claude\ccstatusline"
+mklink /D "%USERPROFILE%\.pi\agent\skills" "\path\to\dot-file\pi\skills"
 ```
 
-完成后重启 Claude Code 会话，或重新加载 `ccstatusline`。
+技能目录会被 pi 自动扫描，按 `SKILL.md` 中的 `description` 匹配任务时自动加载，或由用户显式触发（如 `/grill-me`、`/handoff`）。
 
 ### 4. 链接 Neovim 配置
 
@@ -233,4 +206,4 @@ git log --oneline -20
 git revert <commit>
 ```
 
-由于系统目录是软链接，`git` 操作结果立刻对 Claude Code skills / ccstatusline、Neovim、WezTerm 生效，无需重新安装。
+由于系统目录是软链接，`git` 操作结果立刻对 pi 扩展 / 技能、Neovim、WezTerm 生效，无需重新安装。如果 `pi/extensions/filechanges` 或 `pi/extensions/web-fetch` 的 `package.json` 有变动，记得再跑一次 `npm install`。
