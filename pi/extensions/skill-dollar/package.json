@@ -1,0 +1,8 @@
+{
+  "name": "pi-skill-dollar",
+  "private": true,
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
