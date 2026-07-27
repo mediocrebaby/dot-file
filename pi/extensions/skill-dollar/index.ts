@@ -3,12 +3,13 @@
  *
  * 把 pi 原生的 `/skill:name` 技能调用替换为 `$name`：
  * - 自动补全：输入 `$` 在任意 token 边界（不限行首）弹出技能列表
- * - 提交展开：消息中所有 `$name` 就地展开为技能内容，支持句中引用与一次引用多个技能
+ * - 提交展开：消息中所有 `$name` 展开为技能内容，支持句中引用与一次引用多个技能
+ *   （多技能时拆成多条消息，每个技能各自折叠成一行 `[skill] name`）
  * - 隐藏并禁用原生入口：`/` 补全里不再出现 `skill:xxx`，手输 `/skill:xxx` 会被拦截并提示
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { stripFrontmatter } from "@earendil-works/pi-coding-agent";
+import { SkillInvocationMessageComponent, stripFrontmatter } from "@earendil-works/pi-coding-agent";
 import { fuzzyFilter } from "@earendil-works/pi-tui";
 import { readFileSync } from "node:fs";
 
@@ -25,6 +26,14 @@ const SKILL_NAME_CHARS = "[a-z0-9][a-z0-9-]*";
 const TRIGGER_PATTERN = /(?:^|\s)\$([a-z0-9-]*)$/;
 /** 提交文本里的技能引用 */
 const REFERENCE_PATTERN = new RegExp(`(^|\\s)\\$(${SKILL_NAME_CHARS})`, "g");
+/** 多技能时，除最后一个外的技能以自定义消息注入，用这个 customType 单独折叠渲染 */
+const SKILL_MESSAGE_TYPE = "skill-dollar";
+
+interface SkillMessageDetails {
+	name: string;
+	location: string;
+	content: string;
+}
 
 export default function (pi: ExtensionAPI) {
 	const getSkills = (): SkillEntry[] =>
@@ -38,10 +47,22 @@ export default function (pi: ExtensionAPI) {
 				baseDir: cmd.sourceInfo.baseDir ?? cmd.sourceInfo.path,
 			}));
 
-	const renderSkillBlock = (skill: SkillEntry): string => {
+	/** 技能块的内部文本（不含 `<skill>` 包裹），与 pi 原生格式保持一致 */
+	const renderSkillContent = (skill: SkillEntry): string => {
 		const body = stripFrontmatter(readFileSync(skill.filePath, "utf-8")).trim();
-		return `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
+		return `References are relative to ${skill.baseDir}.\n\n${body}`;
 	};
+
+	const wrapSkillBlock = (skill: SkillEntry, content: string): string =>
+		`<skill name="${skill.name}" location="${skill.filePath}">\n${content}\n</skill>`;
+
+	pi.registerMessageRenderer<SkillMessageDetails>(SKILL_MESSAGE_TYPE, (message, options) => {
+		const details = message.details;
+		if (!details) return undefined;
+		const component = new SkillInvocationMessageComponent(details);
+		component.setExpanded(options.expanded);
+		return component;
+	});
 
 	pi.on("session_start", (_event, ctx: ExtensionContext) => {
 		if (ctx.mode !== "tui") return;
@@ -107,33 +128,45 @@ export default function (pi: ExtensionAPI) {
 		const matches = [...event.text.matchAll(REFERENCE_PATTERN)].filter((match) => skills.has(match[2]));
 		if (matches.length === 0) return;
 
-		let text = "";
-		let consumed = 0;
-		let leadingOnly = matches.length === 1 && matches[0].index === 0 && matches[0][1] === "";
-
+		const resolved: { skill: SkillEntry; content: string; match: RegExpExecArray }[] = [];
 		for (const match of matches) {
-			const name = match[2];
-			const start = match.index;
+			const skill = skills.get(match[2])!;
 			try {
-				text += event.text.slice(consumed, start) + match[1] + renderSkillBlock(skills.get(name)!);
-				consumed = start + match[0].length;
+				resolved.push({ skill, content: renderSkillContent(skill), match });
 			} catch (err) {
-				ctx.ui.notify(`读取技能 ${name} 失败: ${err instanceof Error ? err.message : String(err)}`, "error");
-				leadingOnly = false;
+				ctx.ui.notify(
+					`读取技能 ${skill.name} 失败: ${err instanceof Error ? err.message : String(err)}`,
+					"error",
+				);
 			}
 		}
+		if (resolved.length === 0) return;
 
-		if (consumed === 0) return;
-
-		const rest = event.text.slice(consumed);
-		// 单一行首引用时用 `\n\n` 分隔参数，让 pi 把消息识别为可折叠的技能调用
-		if (leadingOnly) {
-			const args = rest.trim();
-			if (args) text += `\n\n${args}`;
-		} else {
-			text += rest;
+		// pi 只能把「单个技能块 + 可选参数」的用户消息解析成可折叠的技能调用，
+		// 因此把最后一个技能留在用户消息里，其余技能各自作为一条自定义消息前置注入。
+		const last = resolved[resolved.length - 1];
+		for (const { skill, content } of resolved.slice(0, -1)) {
+			pi.sendMessage<SkillMessageDetails>({
+				customType: SKILL_MESSAGE_TYPE,
+				content: wrapSkillBlock(skill, content),
+				display: true,
+				details: { name: skill.name, location: skill.filePath, content },
+			});
 		}
 
+		// 移除全部技能引用（连同前导空白），剩下的才是用户自己的话
+		let args = "";
+		let consumed = 0;
+		for (const { match } of resolved) {
+			args += event.text.slice(consumed, match.index);
+			consumed = match.index + match[0].length;
+		}
+		args += event.text.slice(consumed);
+		args = args.trim();
+
+		const text = args
+			? `${wrapSkillBlock(last.skill, last.content)}\n\n${args}`
+			: wrapSkillBlock(last.skill, last.content);
 		return { action: "transform" as const, text };
 	});
 }
