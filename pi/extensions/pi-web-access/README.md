@@ -342,7 +342,7 @@ Without an explicit `$` or `!` source, `FIRECRAWL_API_KEY`, `GEMINI_API_KEY`, `G
 
 `numResults` (default 5, max 20), `recencyFilter` (mapped to DuckDuckGo's `df` day/week/month/year parameter), and `domainFilter` (translated to `site:`/`-site:` query terms, since the endpoint has no dedicated domain parameter) are all supported. The synthesized `answer` is assembled from result snippets, since the HTML endpoint returns no separate answer text.
 
-Because this is an unofficial scraping endpoint with no SLA, DuckDuckGo may rate-limit or block automated requests (it returns HTTP 202 when doing so). `web_search` surfaces a clear error in that case — wait a bit and retry.
+Because this is an unofficial scraping endpoint with no SLA, DuckDuckGo may still rate-limit or block automated requests (it returns HTTP 202 when doing so). To keep this unlikely, every outgoing request is self-paced at least ~3–4.5s apart (a shared queue, so this covers multiple queries in one call and overlapping calls alike), sent with a randomized desktop browser User-Agent instead of one fixed string, and identical searches (same query, filters, and recency window) are served from a 5-minute in-memory cache instead of re-hitting the endpoint. None of this guarantees DuckDuckGo won't rate-limit — `web_search` still surfaces a clear error in that case — wait a bit and retry.
 
 ### Remote curator access
 
@@ -412,7 +412,7 @@ Values use the same format as pi keybindings (e.g. `ctrl+s`, `ctrl+shift+s`, `al
 
 Set `"enabled": false` under any feature to disable it. For GitHub specifically, `githubClone.enabled: false` only skips clone/API specialization; it does not unregister `fetch_content` or block generic URL extraction. Config changes require a Pi restart.
 
-Rate limits: DuckDuckGo enforces no documented client-side limit, but the unofficial HTML endpoint may throttle or block automated requests without warning. Content fetches run 3 concurrent with a 30s timeout per URL.
+Rate limits: DuckDuckGo enforces no documented client-side limit, but the unofficial HTML endpoint may throttle or block automated requests without warning. `web_search` self-paces outgoing requests (~3–4.5s apart, shared across concurrent calls), rotates its User-Agent, and caches identical searches for 5 minutes to reduce how often that happens. Content fetches run 3 concurrent with a 30s timeout per URL.
 
 ## Limitations
 
