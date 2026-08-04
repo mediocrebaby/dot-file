@@ -106,6 +106,7 @@ export function getQoderCNDirectModel(modelID?: string): string {
   return (
     {
       "qoder-cn": "auto",
+      "qwen3.8-max": "qmodel_38max",
       "qwen3.7-max": "qmodel_latest",
       "qwen3.7-plus": "qmodel",
       "qwen3.6-plus": "qmodel",
@@ -126,6 +127,7 @@ export function getQoderCNDirectModel(modelID?: string): string {
 const qoderCNFriendlyModels: Record<string, { id: string; name: string }> = {
   auto: { id: "auto", name: "Auto · Qoder CN" },
   "qoder-cn": { id: "qoder-cn", name: "Auto · Qoder CN" },
+  qmodel_38max: { id: "qwen3.8-max", name: "Qwen 3.8 Max · Qoder CN" },
   qmodel_latest: { id: "qwen3.7-max", name: "Qwen 3.7 Max · Qoder CN" },
   qmodel: { id: "qwen3.7-plus", name: "Qwen 3.7 Plus · Qoder CN" },
   q36fmodel: { id: "qwen3.6-flash", name: "Qwen 3.6 Flash · Qoder CN" },
