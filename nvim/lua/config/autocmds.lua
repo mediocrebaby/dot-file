@@ -19,3 +19,11 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.opt_local.spell = false
   end,
 })
+
+--- 隐藏语法字符
+vim.api.nvim_create_autocmd("FileType",{
+  pattern = "markdown",
+  callback = function()
+    vim.opt_local.conceallevel = 0
+  end,
+})
