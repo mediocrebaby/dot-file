@@ -23,26 +23,8 @@ function M.apply(config)
 		{ key = "F11", mods = "NONE", action = wezterm.action.ToggleFullScreen },
 		-- Leader + m:隐藏窗口
 		{ key = "m", mods = "LEADER", action = wezterm.action.Hide },
-		-- Leader + n:新建窗口（居中）
-		{
-			key = "n",
-			mods = "LEADER",
-			action = wezterm.action_callback(function(window, pane)
-				local screen = wezterm.gui.screens().active
-				local dimensions = window:get_dimensions()
-
-				local x = (screen.width - dimensions.pixel_width) / 2 + screen.x
-				local y = (screen.height - dimensions.pixel_height) / 2 + screen.y
-
-				wezterm.mux.spawn_window({
-					position = {
-						x = x,
-						y = y,
-						origin = "ActiveScreen",
-					},
-				})
-			end),
-		},
+		-- Leader + n:新建窗口（由 window.lua 统一最大化）
+		{ key = "n", mods = "LEADER", action = wezterm.action.SpawnWindow },
 		-- Leader + w:关闭当前标签页(不确认)
 		{ key = "w", mods = "LEADER", action = wezterm.action.CloseCurrentTab({ confirm = false }) },
 		-- Leader + 方向键:在窗格之间移动
