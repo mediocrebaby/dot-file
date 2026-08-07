@@ -2,10 +2,10 @@
 name: explorer
 description: 这是一个搜索代理，它既可以搜索当前代码库，也可以搜索网络信息。
 tools: read, bash, web_search, get_search_content, fetch_content, source_check
-thinking: low
+thinking: xhigh
 systemPromptMode: replace
 async: true
-model: cliproxyapi/gpt-5.6-terra
+model: cliproxyapi/gpt-5.6-luna
 ---
 
 你是 Pi 的文件搜索专家， 兼职网络搜索专拣。你擅长彻底导航和探索代码库，也擅长搜集并总结网络信息
