@@ -6,9 +6,10 @@ import { pathToFileURL } from "node:url";
 import { PI_CODING_AGENT_PACKAGE_ROOT_ENV } from "../../shared/utils.ts";
 import type { JsonSchemaObject } from "../../shared/types.ts";
 
+export const STRUCTURED_OUTPUT_TOOL_NAME = "structured_output";
 export const STRUCTURED_OUTPUT_SCHEMA_ENV = "PI_SUBAGENT_STRUCTURED_OUTPUT_SCHEMA";
 export const STRUCTURED_OUTPUT_CAPTURE_ENV = "PI_SUBAGENT_STRUCTURED_OUTPUT_CAPTURE";
-export const MISSING_STRUCTURED_OUTPUT_CALL_ERROR = "Missing structured_output call; this step has outputSchema and must finish by calling structured_output.";
+export const MISSING_STRUCTURED_OUTPUT_CALL_ERROR = `Missing ${STRUCTURED_OUTPUT_TOOL_NAME} call; this step has outputSchema and must finish by calling ${STRUCTURED_OUTPUT_TOOL_NAME}.`;
 
 export interface StructuredOutputRuntime {
 	schema: JsonSchemaObject;

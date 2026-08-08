@@ -6,7 +6,7 @@ import { decodePermissionRules, permissionDecision, PERMISSION_AUDIT_PATH_ENV, P
 import { consumeSteerRequestsFromDir, steerAckPathFromDir, writeSteerAckAt, writeSteerCapabilityAt, writeSteerRequestToDir, type SteerRequest } from "../background/control-channel.ts";
 import { SUBAGENT_CHILD_AGENT_ENV, SUBAGENT_CHILD_INDEX_ENV, SUBAGENT_FANOUT_CHILD_ENV, SUBAGENT_STEER_ACK_DIR_ENV, SUBAGENT_STEER_CAPABILITY_ENV, SUBAGENT_STEER_INBOX_ENV } from "./pi-args.ts";
 import { RUNTIME_EXTENSION_ACK_EVENT, RUNTIME_EXTENSION_ACK_PATH_ENV, isRuntimeAcknowledgedExtensionId, writeRuntimeAcknowledgedExtensions } from "./runtime-acknowledged-extensions.ts";
-import { createStructuredOutputToolParameters, STRUCTURED_OUTPUT_CAPTURE_ENV, STRUCTURED_OUTPUT_SCHEMA_ENV, validateStructuredOutputValue } from "./structured-output.ts";
+import { createStructuredOutputToolParameters, STRUCTURED_OUTPUT_CAPTURE_ENV, STRUCTURED_OUTPUT_SCHEMA_ENV, STRUCTURED_OUTPUT_TOOL_NAME, validateStructuredOutputValue } from "./structured-output.ts";
 import {
 	CHILD_TOOL_DIAGNOSTIC_PATH_ENV,
 	MCP_DIRECT_CHILD_TOOLS_ENV,
@@ -25,6 +25,7 @@ import { SUBAGENT_WATCHDOG_WARNING_TYPE } from "../../watchdog/types.ts";
 import { resolveWaitToolConfig } from "../background/wait-config.ts";
 import { registerWaitTool } from "../background/wait-tool.ts";
 import { drainOutstandingWork } from "../background/auto-drain.ts";
+import { registerContextGuard } from "./context-guard.ts";
 
 const SUBAGENT_INHERIT_PROJECT_CONTEXT_ENV = "PI_SUBAGENT_INHERIT_PROJECT_CONTEXT";
 const SUBAGENT_INHERIT_SKILLS_ENV = "PI_SUBAGENT_INHERIT_SKILLS";
@@ -32,8 +33,8 @@ export const SUBAGENT_INTERCOM_SESSION_NAME_ENV = "PI_SUBAGENT_INTERCOM_SESSION_
 
 const STRUCTURED_OUTPUT_INSTRUCTIONS = [
 	"This subagent step has a strict structured output contract.",
-	"Your final action must be to call the `structured_output` tool with JSON matching the provided schema.",
-	"Do not rely on prose-only completion; if you do not call `structured_output`, the parent will fail this step.",
+	`Your final action must be to call the \`${STRUCTURED_OUTPUT_TOOL_NAME}\` tool with JSON matching the provided schema.`,
+	`Do not rely on prose-only completion; if you do not call \`${STRUCTURED_OUTPUT_TOOL_NAME}\`, the parent will fail this step.`,
 ].join("\n");
 
 export const CHILD_SUBAGENT_BOUNDARY_INSTRUCTIONS = [
@@ -277,6 +278,7 @@ function registerToolBudget(pi: ExtensionAPI, budget: ResolvedToolBudget | undef
 	const onRuntimeEvent = pi.on as unknown as (event: string, handler: (event: { toolName?: string }) => unknown) => void;
 	onRuntimeEvent("tool_call", (event) => {
 		const toolName = typeof event.toolName === "string" ? event.toolName : "tool";
+		if (toolName === STRUCTURED_OUTPUT_TOOL_NAME) return undefined;
 		toolCount++;
 		if (budget.soft !== undefined && toolCount >= budget.soft && !softNudged) {
 			softNudged = true;
@@ -406,6 +408,7 @@ export default function registerSubagentPromptRuntime(pi: ExtensionAPI): void {
 	registerRuntimeExtensionAcknowledgements(pi);
 	registerSteeringInbox(pi);
 	registerPermissionGate(pi);
+	registerContextGuard(pi);
 	registerToolBudget(pi, decodeToolBudgetEnv(process.env[TOOL_BUDGET_ENV], { allowZero: process.env[TOOL_BUDGET_ZERO_AUTH_ENV] === "1" }));
 	registerChildWatchdog(pi);
 	const waitToolEnabled = resolveWaitToolConfig().enabled;
@@ -464,7 +467,7 @@ export default function registerSubagentPromptRuntime(pi: ExtensionAPI): void {
 			execute: (_id: string, params: { value: unknown }) => Promise<unknown>;
 		}) => void;
 		registerTool({
-			name: "structured_output",
+			name: STRUCTURED_OUTPUT_TOOL_NAME,
 			label: "Structured Output",
 			description: "Submit the required final structured output for this subagent step. This terminates the step.",
 			parameters: parameters as never,
