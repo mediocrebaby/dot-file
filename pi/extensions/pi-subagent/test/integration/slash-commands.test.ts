@@ -49,6 +49,7 @@ interface RegisterSlashCommandsModule {
 }
 
 interface SlashLiveStateModule {
+	applySlashAsyncCompletion?: typeof import("../../src/slash/slash-live-state.ts").applySlashAsyncCompletion;
 	clearSlashSnapshots?: typeof import("../../src/slash/slash-live-state.ts").clearSlashSnapshots;
 	getSlashRenderableSnapshot?: typeof import("../../src/slash/slash-live-state.ts").getSlashRenderableSnapshot;
 	resolveSlashMessageDetails?: typeof import("../../src/slash/slash-live-state.ts").resolveSlashMessageDetails;
@@ -60,6 +61,7 @@ interface WatchdogRegisterModule {
 
 let registerSlashCommands: RegisterSlashCommandsModule["registerSlashCommands"];
 let registerMainWatchdog: WatchdogRegisterModule["registerMainWatchdog"];
+let applySlashAsyncCompletion: SlashLiveStateModule["applySlashAsyncCompletion"];
 let clearSlashSnapshots: SlashLiveStateModule["clearSlashSnapshots"];
 let getSlashRenderableSnapshot: SlashLiveStateModule["getSlashRenderableSnapshot"];
 let resolveSlashMessageDetails: SlashLiveStateModule["resolveSlashMessageDetails"];
@@ -67,7 +69,7 @@ let available = true;
 try {
 	({ registerSlashCommands } = await import("../../src/slash/slash-commands.ts") as RegisterSlashCommandsModule);
 	({ registerMainWatchdog } = await import("../../src/watchdog/register-main.ts") as WatchdogRegisterModule);
-	({ clearSlashSnapshots, getSlashRenderableSnapshot, resolveSlashMessageDetails } = await import("../../src/slash/slash-live-state.ts") as SlashLiveStateModule);
+	({ applySlashAsyncCompletion, clearSlashSnapshots, getSlashRenderableSnapshot, resolveSlashMessageDetails } = await import("../../src/slash/slash-live-state.ts") as SlashLiveStateModule);
 } catch {
 	available = false;
 }
@@ -598,6 +600,48 @@ describe("slash command custom message delivery", { skip: !available ? "slash-co
 		assert.ok(visibleDetails);
 		const visibleSnapshot = getSlashRenderableSnapshot!(visibleDetails!);
 		assert.equal((visibleSnapshot.result.content[0] as { text?: string }).text, "Scout finished");
+	});
+
+	it("/run keeps an async card live until its completion event supplies the final output", async () => {
+		const sent: unknown[] = [];
+		const commands = new Map<string, { handler(args: string, ctx: unknown): Promise<void> }>();
+		const events = createEventBus();
+		events.on(SLASH_SUBAGENT_REQUEST_EVENT, (data) => {
+			const requestId = (data as { requestId: string }).requestId;
+			events.emit(SLASH_SUBAGENT_STARTED_EVENT, { requestId });
+			events.emit(SLASH_SUBAGENT_RESPONSE_EVENT, {
+				requestId,
+				result: {
+					content: [{ type: "text", text: "Async run started." }],
+					details: { mode: "single", runId: "slash-async", asyncId: "slash-async", asyncDir: "/tmp/slash-async", results: [] },
+				},
+				isError: false,
+			});
+		});
+		const pi = {
+			events,
+			registerCommand(name: string, spec: { handler(args: string, ctx: unknown): Promise<void> }) { commands.set(name, spec); },
+			registerShortcut() {},
+			sendMessage(message: unknown) { sent.push(message); },
+		};
+
+		registerSlashCommands!(pi, createState(projectRoot));
+		await commands.get("run")!.handler("scout inspect this --bg", createCommandContext({ cwd: projectRoot, hasUI: true }));
+		await new Promise<void>((resolve) => setImmediate(resolve));
+
+		const visibleDetails = resolveSlashMessageDetails!((sent[0] as { details?: unknown }).details);
+		assert.ok(visibleDetails);
+		assert.equal(getSlashRenderableSnapshot!(visibleDetails!).result.details.results[0]?.progress?.status, "running");
+		assert.equal(applySlashAsyncCompletion!({
+			runId: "slash-async",
+			mode: "single",
+			state: "complete",
+			success: true,
+			results: [{ agent: "scout", output: "Async final output", success: true }],
+		}), true);
+		const completed = getSlashRenderableSnapshot!(visibleDetails!).result;
+		assert.equal(completed.details.results[0]?.progress?.status, "completed");
+		assert.equal(completed.details.results[0]?.finalOutput, "Async final output");
 	});
 
 	it("/run collapses tool detail before showing the initial live card", async () => {

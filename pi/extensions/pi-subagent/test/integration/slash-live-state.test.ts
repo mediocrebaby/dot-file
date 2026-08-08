@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+interface AsyncLiveStateModule {
+	applyAsyncCompletion?: typeof import("../../src/runs/background/async-live-state.ts").applyAsyncCompletion;
+	clearAsyncLiveResults?: typeof import("../../src/runs/background/async-live-state.ts").clearAsyncLiveResults;
+	trackAsyncLiveResult?: typeof import("../../src/runs/background/async-live-state.ts").trackAsyncLiveResult;
+}
+
 interface SlashLiveStateModule {
+	applySlashAsyncCompletion?: typeof import("../../src/slash/slash-live-state.ts").applySlashAsyncCompletion;
 	applySlashUpdate?: typeof import("../../src/slash/slash-live-state.ts").applySlashUpdate;
 	buildSlashInitialResult?: typeof import("../../src/slash/slash-live-state.ts").buildSlashInitialResult;
 	clearSlashSnapshots?: typeof import("../../src/slash/slash-live-state.ts").clearSlashSnapshots;
@@ -10,6 +17,10 @@ interface SlashLiveStateModule {
 	restoreSlashFinalSnapshots?: typeof import("../../src/slash/slash-live-state.ts").restoreSlashFinalSnapshots;
 }
 
+let applyAsyncCompletion: AsyncLiveStateModule["applyAsyncCompletion"];
+let clearAsyncLiveResults: AsyncLiveStateModule["clearAsyncLiveResults"];
+let trackAsyncLiveResult: AsyncLiveStateModule["trackAsyncLiveResult"];
+let applySlashAsyncCompletion: SlashLiveStateModule["applySlashAsyncCompletion"];
 let applySlashUpdate: SlashLiveStateModule["applySlashUpdate"];
 let buildSlashInitialResult: SlashLiveStateModule["buildSlashInitialResult"];
 let clearSlashSnapshots: SlashLiveStateModule["clearSlashSnapshots"];
@@ -18,7 +29,9 @@ let getSlashRenderableSnapshot: SlashLiveStateModule["getSlashRenderableSnapshot
 let restoreSlashFinalSnapshots: SlashLiveStateModule["restoreSlashFinalSnapshots"];
 let available = true;
 try {
+	({ applyAsyncCompletion, clearAsyncLiveResults, trackAsyncLiveResult } = await import("../../src/runs/background/async-live-state.ts") as AsyncLiveStateModule);
 	({
+		applySlashAsyncCompletion,
 		applySlashUpdate,
 		buildSlashInitialResult,
 		clearSlashSnapshots,
@@ -108,6 +121,105 @@ describe("slash live state", { skip: !available ? "slash-live-state.ts not impor
 		assert.equal(details.result.details.results[0]?.progress?.status, "running");
 		assert.equal(details.result.details.results[39]?.agent, "reviewer");
 		assert.equal(details.result.details.results[39]?.progress?.index, 39);
+	});
+
+	it("keeps async slash cards live until the correlated completion event arrives", () => {
+		clearSlashSnapshots!();
+		const details = buildSlashInitialResult!("req-async", {
+			agent: "explorer",
+			task: "inspect status flow",
+			async: true,
+		});
+
+		finalizeSlashResult!({
+			requestId: "req-async",
+			result: {
+				content: [{ type: "text", text: "Async run started." }],
+				details: { mode: "single", runId: "async-1", asyncId: "async-1", asyncDir: "/tmp/async-1", results: [] },
+			},
+			isError: false,
+		});
+
+		assert.equal(getSlashRenderableSnapshot!(details).result.details.results[0]?.progress?.status, "running");
+		assert.equal(applySlashAsyncCompletion!({
+			runId: "async-1",
+			mode: "single",
+			state: "complete",
+			success: true,
+			results: [{ agent: "explorer", output: "final async result", success: true }],
+		}), true);
+
+		const completed = getSlashRenderableSnapshot!(details).result;
+		assert.equal(completed.details.results[0]?.progress?.status, "completed");
+		assert.equal(completed.details.results[0]?.finalOutput, "final async result");
+	});
+
+	it("uses an early generic completion when it arrives before slash correlation", () => {
+		clearSlashSnapshots!();
+		clearAsyncLiveResults!();
+		const details = buildSlashInitialResult!("req-early", { agent: "explorer", task: "fast task", async: true });
+		const response = {
+			requestId: "req-early",
+			result: {
+				content: [{ type: "text" as const, text: "Async run started." }],
+				details: { mode: "single" as const, runId: "async-early", asyncId: "async-early", results: [] },
+			},
+			isError: false,
+		};
+		trackAsyncLiveResult!(response.result);
+		applyAsyncCompletion!({
+			runId: "async-early",
+			mode: "single",
+			state: "complete",
+			success: true,
+			results: [{ agent: "explorer", output: "already finished", success: true }],
+		});
+		finalizeSlashResult!(response);
+
+		const completed = getSlashRenderableSnapshot!(details).result;
+		assert.equal(completed.details.results[0]?.progress?.status, "completed");
+		assert.equal(completed.details.results[0]?.finalOutput, "already finished");
+	});
+
+	it("projects stopped async workflows into a terminal slash snapshot", () => {
+		clearSlashSnapshots!();
+		const details = buildSlashInitialResult!("req-workflow", {
+			workflowScript: "return await runs.run('scan', { agent: 'explorer' })",
+			async: true,
+			chatProgress: "live-card",
+		});
+		finalizeSlashResult!({
+			requestId: "req-workflow",
+			result: {
+				content: [{ type: "text", text: "Async workflow started." }],
+				details: {
+					mode: "workflow",
+					runId: "workflow-stop",
+					asyncId: "workflow-stop",
+					asyncDir: "/tmp/workflow-stop",
+					results: [],
+					chatProgress: { mode: "live-card", repoRelation: "same" },
+				},
+			},
+			isError: false,
+		});
+		applySlashAsyncCompletion!({
+			runId: "workflow-stop",
+			mode: "workflow",
+			state: "stopped",
+			stopped: true,
+			error: "Stopped by user.",
+			workflow: {
+				trace: [{ operation: "run", key: "scan", state: "failed", error: "Stopped by user." }],
+				emits: [],
+				console: [],
+			},
+		});
+
+		const stopped = getSlashRenderableSnapshot!(details).result;
+		assert.equal(stopped.details.workflow?.terminalState, "stopped");
+		assert.equal(stopped.details.stopped, true);
+		assert.match((stopped.content[0] as { text: string }).text, /Workflow stopped/);
 	});
 
 	it("prefers finalized snapshots and restores them from persisted custom messages", () => {

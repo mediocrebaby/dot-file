@@ -1564,7 +1564,13 @@ export function renderSubagentResult(
 	frame?: number,
 ): Component {
 	const d = result.details;
-	if (d?.mode === "workflow" && d.chatProgress?.mode === "live-card" && !result.isError && d.workflow?.value === undefined) return renderWorkflowChatProgress(d, result, theme, frame);
+	if (d?.mode === "workflow" && d.chatProgress?.mode === "live-card") {
+		if (d.workflow?.terminalState) {
+			const { chatProgress: _chatProgress, ...terminalDetails } = d;
+			return renderSubagentResult({ ...result, details: { ...terminalDetails, results: [] } }, options, theme, frame);
+		}
+		if (!result.isError && d.workflow?.value === undefined) return renderWorkflowChatProgress(d, result, theme, frame);
+	}
 	if (!d || !d.results.length) {
 		const t = result.content[0];
 		const text = t?.type === "text" ? t.text : "(no output)";

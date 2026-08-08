@@ -2,6 +2,12 @@ import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import type { Message } from "@earendil-works/pi-ai";
 import type { SubagentParamsLike } from "../runs/foreground/subagent-executor.ts";
 import type { SlashSubagentResponse, SlashSubagentUpdate } from "./slash-bridge.ts";
+import {
+	buildAsyncCompletionResult,
+	getAsyncRenderableSnapshot,
+	resolveAsyncCompletionRunId,
+	type AsyncCompletionPayload,
+} from "../runs/background/async-live-state.ts";
 import { type Details, type SingleResult, type Usage, SLASH_RESULT_TYPE } from "../shared/types.ts";
 
 export interface SlashMessageDetails {
@@ -27,6 +33,7 @@ type ChainStepLike = SequentialChainStepLike | ParallelChainStepLike;
 
 const liveSnapshots = new Map<string, SlashSnapshot>();
 const finalSnapshots = new Map<string, SlashSnapshot>();
+const asyncRequestIds = new Map<string, Set<string>>();
 let versionCounter = 1;
 
 const EMPTY_MESSAGES: Message[] = [];
@@ -155,6 +162,17 @@ function buildChainInitialResult(params: SubagentParamsLike): AgentToolResult<De
 	};
 }
 
+function buildWorkflowInitialResult(): AgentToolResult<Details> {
+	return {
+		content: [{ type: "text", text: "Workflow running." }],
+		details: {
+			mode: "workflow",
+			results: [],
+			workflow: { trace: [], emits: [], console: [] },
+		},
+	};
+}
+
 function buildSingleInitialResult(params: SubagentParamsLike): AgentToolResult<Details> {
 	const agent = params.agent ?? "subagent";
 	const task = params.task ?? "";
@@ -180,11 +198,13 @@ function buildSingleInitialResult(params: SubagentParamsLike): AgentToolResult<D
 }
 
 export function buildSlashInitialResult(requestId: string, params: SubagentParamsLike): SlashMessageDetails {
-	const result = (params.tasks?.length ?? 0) > 0
-		? buildParallelInitialResult(params)
-		: (params.chain?.length ?? 0) > 0
-			? buildChainInitialResult(params)
-			: buildSingleInitialResult(params);
+	const result = params.workflowScript !== undefined
+		? buildWorkflowInitialResult()
+		: (params.tasks?.length ?? 0) > 0
+			? buildParallelInitialResult(params)
+			: (params.chain?.length ?? 0) > 0
+				? buildChainInitialResult(params)
+				: buildSingleInitialResult(params);
 	liveSnapshots.set(requestId, { result, version: nextVersion() });
 	finalSnapshots.delete(requestId);
 	return { requestId, result };
@@ -223,7 +243,49 @@ export function applySlashUpdate(requestId: string, update: SlashSubagentUpdate)
 	});
 }
 
+function mergeAsyncStartResult(
+	current: AgentToolResult<Details> | undefined,
+	started: AgentToolResult<Details>,
+): AgentToolResult<Details> {
+	if (!current || started.details.results.length > 0) return started;
+	return {
+		...started,
+		details: {
+			...current.details,
+			...started.details,
+			results: current.details.results,
+			...(current.details.progress ? { progress: current.details.progress } : {}),
+			...(current.details.workflow && !started.details.workflow ? { workflow: current.details.workflow } : {}),
+		},
+	};
+}
+
+function isAsyncTerminalResult(result: AgentToolResult<Details>): boolean {
+	if (result.details.mode === "workflow") return result.details.workflow?.terminalState !== undefined;
+	return result.details.results.length > 0
+		&& result.details.results.every((entry) => entry.progress?.status !== "running" && entry.progress?.status !== "pending");
+}
+
+function linkAsyncRequest(asyncId: string, requestId: string): void {
+	const requestIds = asyncRequestIds.get(asyncId) ?? new Set<string>();
+	requestIds.add(requestId);
+	asyncRequestIds.set(asyncId, requestIds);
+}
+
 export function finalizeSlashResult(response: SlashSubagentResponse): SlashMessageDetails {
+	const asyncId = response.result.details.asyncId;
+	if (asyncId && !response.isError) {
+		const projected = getAsyncRenderableSnapshot(response.result).result;
+		if (projected !== response.result && isAsyncTerminalResult(projected)) {
+			finalSnapshots.set(response.requestId, { result: projected, version: nextVersion() });
+			liveSnapshots.delete(response.requestId);
+			return { requestId: response.requestId, result: projected };
+		}
+		const result = mergeAsyncStartResult(liveSnapshots.get(response.requestId)?.result, response.result);
+		liveSnapshots.set(response.requestId, { result, version: nextVersion() });
+		linkAsyncRequest(asyncId, response.requestId);
+		return { requestId: response.requestId, result };
+	}
 	const snapshot = {
 		result: response.result,
 		version: nextVersion(),
@@ -234,6 +296,24 @@ export function finalizeSlashResult(response: SlashSubagentResponse): SlashMessa
 		requestId: response.requestId,
 		result: response.result,
 	};
+}
+
+export function applySlashAsyncCompletion(payload: AsyncCompletionPayload): boolean {
+	const asyncId = resolveAsyncCompletionRunId(payload);
+	if (!asyncId) return false;
+	const requestIds = asyncRequestIds.get(asyncId);
+	if (!requestIds?.size) return false;
+	let changed = false;
+	for (const requestId of requestIds) {
+		const current = liveSnapshots.get(requestId)?.result;
+		const result = buildAsyncCompletionResult(payload, current);
+		if (!result) continue;
+		finalSnapshots.set(requestId, { result, version: nextVersion() });
+		liveSnapshots.delete(requestId);
+		changed = true;
+	}
+	asyncRequestIds.delete(asyncId);
+	return changed;
 }
 
 export function failSlashResult(requestId: string, params: SubagentParamsLike, message: string): SlashMessageDetails {
@@ -279,6 +359,7 @@ export function getSlashRenderableSnapshot(details: SlashMessageDetails): SlashS
 export function restoreSlashFinalSnapshots(entries: unknown[]): void {
 	liveSnapshots.clear();
 	finalSnapshots.clear();
+	asyncRequestIds.clear();
 	for (const entry of entries) {
 		const e = entry as { type?: string; customType?: string; details?: unknown };
 		if (e?.type !== "custom_message" || e.customType !== SLASH_RESULT_TYPE) continue;
@@ -291,4 +372,5 @@ export function restoreSlashFinalSnapshots(entries: unknown[]): void {
 export function clearSlashSnapshots(): void {
 	liveSnapshots.clear();
 	finalSnapshots.clear();
+	asyncRequestIds.clear();
 }

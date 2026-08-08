@@ -93,6 +93,7 @@ import { handleHerdrInspectorAction, HERDR_INSPECTOR_ACTIONS } from "../../inspe
 import { handleHerdrProjectPaneAction, HERDR_PROJECT_PANE_ACTIONS } from "../../inspectors/herdr/project-panes.ts";
 import { runWorkflowScript, WorkflowScriptError, type WorkflowScriptChildResult } from "../../workflows/scripted-workflow.ts";
 import { resolveWorkflowChatProgress, type WorkflowChatProgressProjection } from "../../workflows/chat-progress.ts";
+import { formatWorkflowCompletionContent, formatWorkflowTerminalContent, formatWorkflowValue } from "../../workflows/result-format.ts";
 import {
 	cleanupWorktrees,
 	createWorktrees,
@@ -3917,16 +3918,6 @@ function prepareWorkflowChildParams(params: SubagentParamsLike): SubagentParamsL
 	};
 }
 
-function formatWorkflowValue(value: unknown): string {
-	if (value === undefined) return "(undefined)";
-	if (typeof value === "string") return value;
-	try {
-		return JSON.stringify(value, null, 2);
-	} catch {
-		return String(value);
-	}
-}
-
 function workflowChatProgressUpdate(
 	runId: string,
 	chatProgress: WorkflowChatProgressProjection,
@@ -4112,14 +4103,14 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 						const emitPreview = workflow.emits.length > 0 ? ` Emitted: ${workflow.emits.map(formatWorkflowValue).join(", ").slice(0, 1_000)}` : "";
 						const summary = `Workflow completed with ${workflow.children.length} child run(s). Return: ${returnPreview}${emitPreview} Trace: ${workflow.trace.length} event(s).`;
 						const workflowUsage = sumResultsUsage(workflowResults);
-						status = { ...status, state: "complete", endedAt: Date.now(), workflow: { value: workflow.value, trace: workflow.trace, emits: workflow.emits, console: workflow.console }, totalTokens: { input: workflowUsage.input, output: workflowUsage.output, total: workflowUsage.input + workflowUsage.output }, totalCost: sumResultsCost(workflowResults) };
+						status = { ...status, state: "complete", endedAt: Date.now(), workflow: { value: workflow.value, terminalState: "complete", trace: workflow.trace, emits: workflow.emits, console: workflow.console }, totalTokens: { input: workflowUsage.input, output: workflowUsage.output, total: workflowUsage.input + workflowUsage.output }, totalCost: sumResultsCost(workflowResults) };
 						persist();
 						appendWorkflowEvent({ type: "subagent.workflow.completed", state: "complete" });
 						writeAtomicJson(resultPath, { id: workflowRunId, runId: workflowRunId, agent: "workflow", mode: "workflow", success: true, state: "complete", summary, output: summary, results: workflow.children.map((child) => ({ agent: child.key, output: child.output, outputState: child.output.trim() || child.structuredOutput !== undefined ? "present" : "absent", structuredOutput: child.structuredOutput, success: child.ok, ...(child.artifactPaths[0] ? { artifactPaths: { outputPath: child.artifactPaths[0] } } : {}) })), workflow: status.workflow, asyncDir, cwd: ctx.cwd, sessionId: currentSessionId, timestamp: Date.now(), durationMs: Date.now() - startedAt });
 					} catch (error) {
 						const partial = error instanceof WorkflowScriptError ? error.partial : { trace: [], emits: [], console: [], children: [] };
 						const stopped = controller.signal.aborted;
-						status = compactOptional<AsyncStatus>({ ...status, state: stopped ? "stopped" : "failed", stopped: stopped || undefined, error: error instanceof Error ? error.message : String(error), endedAt: Date.now(), workflow: { trace: partial.trace, emits: partial.emits, console: partial.console } });
+						status = compactOptional<AsyncStatus>({ ...status, state: stopped ? "stopped" : "failed", stopped: stopped || undefined, error: error instanceof Error ? error.message : String(error), endedAt: Date.now(), workflow: { terminalState: stopped ? "stopped" : "failed", trace: partial.trace, emits: partial.emits, console: partial.console } });
 						persist();
 						appendWorkflowEvent({ type: "subagent.workflow.completed", state: status.state, error: status.error });
 						writeAtomicJson(resultPath, { id: workflowRunId, runId: workflowRunId, agent: "workflow", mode: "workflow", success: false, state: status.state, summary: status.error, error: status.error, stopped: status.stopped, results: partial.children.map((child) => ({ agent: child.key, output: child.output, outputState: child.output.trim() || child.structuredOutput !== undefined ? "present" : "absent", structuredOutput: child.structuredOutput, success: child.ok, ...(child.artifactPaths[0] ? { artifactPaths: { outputPath: child.artifactPaths[0] } } : {}) })), workflow: status.workflow, asyncDir, cwd: ctx.cwd, sessionId: currentSessionId, timestamp: Date.now(), durationMs: Date.now() - startedAt });
@@ -4163,27 +4154,17 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 					},
 					status: async (keyOrRunId, workflowSignal) => workflowChildResult(keyOrRunId, await execute(randomUUID(), { action: "status", id: keyOrRunId }, workflowSignal, undefined, ctx)),
 				});
-				const traceLines = workflow.trace.map((entry) => `- ${entry.operation} ${entry.key}: ${entry.state}${entry.runId ? ` (${entry.runId})` : ""}${entry.durationMs !== undefined ? ` in ${entry.durationMs}ms` : ""}${entry.error ? ` — ${entry.error}` : ""}`);
-				const sections = ["Workflow completed.", `Return:\n${formatWorkflowValue(workflow.value)}`];
-				if (workflow.emits.length > 0) sections.push(`Emitted:\n${workflow.emits.map(formatWorkflowValue).join("\n")}`);
-				if (workflow.console.length > 0) sections.push(`Console:\n${workflow.console.map((entry) => `[${entry.level}] ${entry.text}`).join("\n")}`);
-				if (traceLines.length > 0) sections.push(`Call trace:\n${traceLines.join("\n")}`);
 				return {
-					content: [{ type: "text", text: sections.join("\n\n") }],
-					details: compactOptional<Details>({ mode: "workflow", runId: _id, results: workflow.children.flatMap((child) => (child.results ?? []) as SingleResult[]), totalChildUsage: sumResultsUsage(workflowResults), totalCost: sumResultsCost(workflowResults), usageBudget: usageBudgetState(workflowUsageBudget.budget, sumResultsCost(workflowResults)), workflow: { value: workflow.value, trace: workflow.trace, emits: workflow.emits, console: workflow.console }, chatProgress }),
+					content: [{ type: "text", text: formatWorkflowCompletionContent(workflow) }],
+					details: compactOptional<Details>({ mode: "workflow", runId: _id, results: workflow.children.flatMap((child) => (child.results ?? []) as SingleResult[]), totalChildUsage: sumResultsUsage(workflowResults), totalCost: sumResultsCost(workflowResults), usageBudget: usageBudgetState(workflowUsageBudget.budget, sumResultsCost(workflowResults)), workflow: { value: workflow.value, terminalState: "complete", trace: workflow.trace, emits: workflow.emits, console: workflow.console }, chatProgress }),
 				};
 			} catch (error) {
 				const partial = error instanceof WorkflowScriptError ? error.partial : { trace: [], emits: [], console: [], children: [] };
 				const text = error instanceof Error ? error.message : String(error);
-				const traceLines = partial.trace.map((entry) => `- ${entry.operation} ${entry.key}: ${entry.state}${entry.runId ? ` (${entry.runId})` : ""}${entry.error ? ` — ${entry.error}` : ""}`);
-				const sections = [`Workflow failed: ${text}`];
-				if (partial.emits.length > 0) sections.push(`Emitted:\n${partial.emits.map(formatWorkflowValue).join("\n")}`);
-				if (partial.console.length > 0) sections.push(`Console:\n${partial.console.map((entry) => `[${entry.level}] ${entry.text}`).join("\n")}`);
-				if (traceLines.length > 0) sections.push(`Call trace:\n${traceLines.join("\n")}`);
 				return {
-					content: [{ type: "text", text: sections.join("\n\n") }],
+					content: [{ type: "text", text: formatWorkflowTerminalContent("Workflow failed", text, partial) }],
 					isError: true,
-					details: compactOptional<Details>({ mode: "workflow", runId: _id, results: partial.children.flatMap((child) => (child.results ?? []) as SingleResult[]), totalChildUsage: sumResultsUsage(workflowResults), totalCost: sumResultsCost(workflowResults), usageBudget: usageBudgetState(workflowUsageBudget.budget, sumResultsCost(workflowResults)), workflow: { trace: partial.trace, emits: partial.emits, console: partial.console }, chatProgress }),
+					details: compactOptional<Details>({ mode: "workflow", runId: _id, results: partial.children.flatMap((child) => (child.results ?? []) as SingleResult[]), totalChildUsage: sumResultsUsage(workflowResults), totalCost: sumResultsCost(workflowResults), usageBudget: usageBudgetState(workflowUsageBudget.budget, sumResultsCost(workflowResults)), workflow: { terminalState: "failed", trace: partial.trace, emits: partial.emits, console: partial.console }, chatProgress }),
 				};
 			}
 		}

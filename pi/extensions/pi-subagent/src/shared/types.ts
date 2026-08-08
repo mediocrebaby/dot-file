@@ -993,6 +993,7 @@ export interface Details {
 	mission?: MissionRecord;
 	workflow?: {
 		value?: unknown;
+		terminalState?: "complete" | "failed" | "paused" | "stopped" | "rejected";
 		trace: Array<{
 			operation: "run" | "status";
 			key: string;

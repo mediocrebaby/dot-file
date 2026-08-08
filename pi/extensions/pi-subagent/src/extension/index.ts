@@ -30,6 +30,13 @@ import { SubagentFleetStatus, resolveFleetViewPlacement } from "../tui/fleet-sta
 import { SubagentParams } from "./schemas.ts";
 import { createSubagentExecutor, type SubagentParamsLike } from "../runs/foreground/subagent-executor.ts";
 import { createAsyncJobTracker } from "../runs/background/async-job-tracker.ts";
+import {
+	applyAsyncCompletion,
+	clearAsyncLiveResults,
+	getAsyncRenderableSnapshot,
+	trackAsyncLiveResult,
+	type AsyncCompletionPayload,
+} from "../runs/background/async-live-state.ts";
 import { createResultWatcher } from "../runs/background/result-watcher.ts";
 import { createScheduledRunManager } from "../runs/background/scheduled-runs.ts";
 import { registerSlashCommands } from "../slash/slash-commands.ts";
@@ -39,7 +46,7 @@ import { registerSlashSubagentBridge } from "../slash/slash-bridge.ts";
 import { createNativeSupervisorChannel } from "../intercom/native-supervisor-channel.ts";
 import { registerHerdrStatusBridge } from "../integrations/herdr-status.ts";
 import { registerSubagentRpcBridge } from "./rpc.ts";
-import { clearSlashSnapshots, getSlashRenderableSnapshot, resolveSlashMessageDetails, restoreSlashFinalSnapshots, type SlashMessageDetails } from "../slash/slash-live-state.ts";
+import { applySlashAsyncCompletion, clearSlashSnapshots, getSlashRenderableSnapshot, resolveSlashMessageDetails, restoreSlashFinalSnapshots, type SlashMessageDetails } from "../slash/slash-live-state.ts";
 import { inspectSubagentStatus } from "../runs/background/run-status.ts";
 import { resolveWaitToolConfig } from "../runs/background/subagent-wait.ts";
 import { registerWaitTool } from "../runs/background/wait-tool.ts";
@@ -96,9 +103,12 @@ function expandTilde(p: string): string {
 	return p.startsWith("~/") ? path.join(os.homedir(), p.slice(2)) : p;
 }
 
-function isSlashResultRunning(result: { details?: Details }): boolean {
+function isSlashResultRunning(result: { details?: Details; isError?: boolean }): boolean {
 	return result.details?.progress?.some((entry) => entry.status === "running")
 		|| result.details?.results.some((entry) => entry.progress?.status === "running")
+		|| (result.isError !== true
+			&& result.details?.mode === "workflow"
+			&& result.details.workflow?.terminalState === undefined)
 		|| false;
 }
 
@@ -122,6 +132,26 @@ function rebuildSlashResultContainer(
 	const box = new Box(1, 1, (text: string) => theme.bg(boxTheme, text));
 	box.addChild(renderSubagentResult(result, options, theme));
 	container.addChild(box);
+}
+
+function createAsyncResultComponent(
+	initialResult: AgentToolResult<Details>,
+	options: { expanded: boolean },
+	theme: ExtensionContext["ui"]["theme"],
+): Container {
+	trackAsyncLiveResult(initialResult);
+	const container = new Container();
+	let lastVersion = -1;
+	container.render = (width: number): string[] => {
+		const snapshot = getAsyncRenderableSnapshot(initialResult);
+		if (snapshot.version !== lastVersion || isSlashResultRunning(snapshot.result)) {
+			lastVersion = snapshot.version;
+			container.clear();
+			container.addChild(renderSubagentResult(snapshot.result, options, theme));
+		}
+		return Container.prototype.render.call(container, width);
+	};
+	return container;
 }
 
 function createSlashResultComponent(
@@ -257,6 +287,8 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 
 	const runtimeCleanup = () => {
 		stopResultWatcher();
+		clearAsyncLiveResults();
+		clearSlashSnapshots();
 		state.currentSessionId = null;
 		completionNotifier.dispose();
 		mainWatchdog.dispose();
@@ -364,9 +396,11 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		return new SubagentControlNoticeComponent({ ...details, noticeText: formatSubagentControlNotice(details, content) }, theme);
 	});
 
-	const executeSubagentCollapsed = (id: string, params: SubagentParamsLike, signal: AbortSignal, onUpdate: ((result: AgentToolResult<Details>) => void) | undefined, ctx: ExtensionContext) => {
+	const executeSubagentCollapsed = async (id: string, params: SubagentParamsLike, signal: AbortSignal, onUpdate: ((result: AgentToolResult<Details>) => void) | undefined, ctx: ExtensionContext) => {
 		if (ctx.hasUI) ctx.ui.setToolsExpanded(false);
-		return executor.execute(id, params, signal, onUpdate, ctx);
+		const result = await executor.execute(id, params, signal, onUpdate, ctx);
+		trackAsyncLiveResult(result);
+		return result;
 	};
 
 	const slashBridge = registerSlashSubagentBridge({
@@ -433,7 +467,9 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 
 		renderResult(result, options, theme, context) {
 			clearLegacyResultAnimationTimer(context);
-			return renderSubagentResult(result, options, theme);
+			return result.details.asyncId
+				? createAsyncResultComponent(result, options, theme)
+				: renderSubagentResult(result, options, theme);
 		},
 
 	};
@@ -495,11 +531,22 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		fleetStatus?.refresh();
 	};
 	const asyncCompleteHandler = (payload: unknown) => {
+		const completion = payload as AsyncCompletionPayload;
+		const liveResultChanged = applyAsyncCompletion(completion);
+		const slashResultChanged = applySlashAsyncCompletion(completion);
 		handleComplete(payload);
 		try {
 			syncMissionFromAsyncCompletion(payload);
 		} catch (error) {
 			console.error("Failed to update mission from async completion:", error);
+		}
+		if (liveResultChanged || slashResultChanged) {
+			try {
+				state.lastUiContext?.ui.requestRender?.();
+			} catch (error) {
+				if (!isStaleExtensionContextError(error)) throw error;
+				state.lastUiContext = null;
+			}
 		}
 		fleetStatus?.refresh();
 	};
@@ -566,6 +613,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		resetJobs(ctx);
 		restoreActiveJobs(ctx);
 		scheduledRunManager.bindSession(ctx);
+		clearAsyncLiveResults();
 		restoreSlashFinalSnapshots(ctx.sessionManager.getEntries());
 		waitSubscriptionManager.restore();
 		startResultWatcher();
@@ -625,6 +673,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		}
 		state.cleanupTimers.clear();
 		state.asyncJobs.clear();
+		clearAsyncLiveResults();
 		clearSlashSnapshots();
 		slashBridge.cancelAll();
 		slashBridge.dispose();

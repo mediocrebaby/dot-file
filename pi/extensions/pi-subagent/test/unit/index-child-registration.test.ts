@@ -491,6 +491,74 @@ describe("subagent extension child mode", () => {
 		}
 	});
 
+	it("rerenders an async workflow tool card when the completion event arrives", () => {
+		const script = String.raw`
+			import registerSubagentExtension from "./index.ts";
+			const listeners = new Map();
+			const handlers = new Map();
+			const events = {
+				on(channel, handler) {
+					let channelListeners = listeners.get(channel);
+					if (!channelListeners) listeners.set(channel, channelListeners = new Set());
+					channelListeners.add(handler);
+					return () => channelListeners.delete(handler);
+				},
+				emit(channel, payload) {
+					for (const handler of listeners.get(channel) ?? []) handler(payload);
+				},
+			};
+			let registeredTool;
+			let renderRequests = 0;
+			const fakePi = new Proxy({
+				events,
+				on(channel, handler) { handlers.set(channel, handler); },
+				registerTool(tool) { if (tool.name === "subagent") registeredTool = tool; },
+				registerCommand() {}, registerShortcut() {}, registerMessageRenderer() {}, sendMessage() {}, getSessionName() {},
+			}, { get(target, prop) { return prop in target ? target[prop] : () => undefined; } });
+			registerSubagentExtension(fakePi);
+			if (!registeredTool) throw new Error("tool not registered");
+			const theme = { fg(_name, text) { return text; }, bg(_name, text) { return text; }, bold(text) { return text; } };
+			const ctx = {
+				cwd: process.cwd(), hasUI: true,
+				ui: { setWidget() {}, requestRender() { renderRequests += 1; }, theme },
+				sessionManager: { getSessionId() { return "live-card-session"; }, getSessionFile() { return null; }, getEntries() { return []; } },
+				modelRegistry: { getAvailable() { return []; } },
+			};
+			handlers.get("tool_result")({ toolName: "subagent" }, ctx);
+			const initial = {
+				content: [{ type: "text", text: "Workflow running." }],
+				details: {
+					mode: "workflow", runId: "live-workflow", asyncId: "live-workflow", asyncDir: "/tmp/live-workflow", results: [],
+					chatProgress: { mode: "live-card", repoRelation: "same", repoLabel: "pi-subagents" },
+					workflow: { trace: [], emits: [], console: [] },
+				},
+			};
+			const component = registeredTool.renderResult(initial, { expanded: true }, theme, { state: {} });
+			const before = component.render(120).join("\n");
+			if (!before.includes("running")) throw new Error("initial card was not running: " + before);
+			events.emit("subagent:async-complete", {
+				runId: "live-workflow", mode: "workflow", state: "complete", success: true,
+				workflow: {
+					value: "final answer",
+					trace: [{ operation: "run", key: "scan", state: "completed", runId: "child-1" }],
+					emits: [], console: [],
+				},
+				results: [{ agent: "explorer", output: "scan complete", success: true }],
+			});
+			const after = component.render(120).join("\n");
+			if (!after.includes("Workflow completed")) throw new Error("completion was not projected: " + after);
+			if (!after.includes("final answer")) throw new Error("final value missing: " + after);
+			if (after.includes("waiting for workflow child launches")) throw new Error("card remained in running state: " + after);
+			if (renderRequests === 0) throw new Error("completion did not request a UI render");
+		`;
+
+		execFileSync(
+			process.execPath,
+			["--experimental-strip-types", "--import", "./test/support/register-loader.mjs", "--input-type=module", "--eval", script],
+			{ cwd: projectRoot, env: parentToolEnv(), stdio: "pipe" },
+		);
+	});
+
 	it("registers the main watchdog command and renderer in parent mode", () => {
 		const script = String.raw`
 			import registerSubagentExtension from "./index.ts";
