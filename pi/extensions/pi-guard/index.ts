@@ -7,8 +7,16 @@
  * 无 UI 环境(如 print 模式)下默认阻止执行。
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionMode } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+
+export const PI_GUARD_CONFIRMATION_REQUIRED_EVENT =
+	"pi-guard:confirmation-required";
+
+export interface PiGuardConfirmationRequiredPayload {
+	cwd: string;
+	mode: ExtensionMode;
+}
 
 export default function (pi: ExtensionAPI) {
 	const rmPattern = /\brm\b/;
@@ -22,6 +30,12 @@ export default function (pi: ExtensionAPI) {
 		if (!ctx.hasUI) {
 			return { block: true, reason: "含 rm 命令,当前无 UI 无法确认,默认拦截" };
 		}
+
+		const confirmationRequest: PiGuardConfirmationRequiredPayload = {
+			cwd: ctx.cwd,
+			mode: ctx.mode,
+		};
+		pi.events.emit(PI_GUARD_CONFIRMATION_REQUIRED_EVENT, confirmationRequest);
 
 		const ok = await ctx.ui.confirm(
 			"⚠️ 检测到 rm 命令",
