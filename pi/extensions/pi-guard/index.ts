@@ -7,25 +7,33 @@
  * 无 UI 环境(如 print 模式)下默认阻止执行。
  */
 
-import type { ExtensionAPI, ExtensionMode } from "@earendil-works/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
+
+import { extractRmCommands } from "./rm-command.ts";
+import { confirmRmExecution } from "./rm-confirmation.ts";
 
 export const PI_GUARD_CONFIRMATION_REQUIRED_EVENT =
 	"pi-guard:confirmation-required";
 
 export interface PiGuardConfirmationRequiredPayload {
 	cwd: string;
-	mode: ExtensionMode;
+	mode: ExtensionContext["mode"];
 }
 
+const RM_PATTERN = /\brm\b/;
+const RM_COMMAND_FALLBACK = "rm";
+
 export default function (pi: ExtensionAPI) {
-	const rmPattern = /\brm\b/;
 
 	pi.on("tool_call", async (event, ctx) => {
 		if (!isToolCallEventType("bash", event)) return;
 
 		const command = event.input.command;
-		if (!rmPattern.test(command)) return;
+		if (!RM_PATTERN.test(command)) return;
 
 		if (!ctx.hasUI) {
 			return { block: true, reason: "含 rm 命令,当前无 UI 无法确认,默认拦截" };
@@ -37,10 +45,14 @@ export default function (pi: ExtensionAPI) {
 		};
 		pi.events.emit(PI_GUARD_CONFIRMATION_REQUIRED_EVENT, confirmationRequest);
 
-		const ok = await ctx.ui.confirm(
-			"⚠️ 检测到 rm 命令",
-			`即将执行:\n\n  ${command}\n\n是否允许?`,
-		);
+		const extractedCommands = extractRmCommands(command);
+		const ok = await confirmRmExecution(ctx.ui, {
+			commands:
+				extractedCommands.length > 0
+					? extractedCommands
+					: [RM_COMMAND_FALLBACK],
+			extractionIncomplete: extractedCommands.length === 0,
+		});
 
 		if (!ok) {
 			return { block: true, reason: "用户拒绝执行 rm 命令" };
