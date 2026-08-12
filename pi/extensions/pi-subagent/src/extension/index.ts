@@ -227,7 +227,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 	const asyncByDefault = resolveAsyncByDefault(config);
 	const fleetViewEnabled = config.fleetView !== false;
 	const fleetViewPlacement = resolveFleetViewPlacement(config.fleetViewPlacement);
-	const asyncWidgetEnabled = config.asyncWidget !== false;
+	const asyncWidgetEnabled = config.asyncWidget === true;
 	const tempArtifactsDir = getArtifactsDir(null);
 	cleanupAllArtifactDirs(DEFAULT_ARTIFACT_CONFIG.cleanupDays);
 

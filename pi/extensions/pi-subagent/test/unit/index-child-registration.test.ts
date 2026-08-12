@@ -199,12 +199,12 @@ describe("subagent extension child mode", () => {
 		}
 	});
 
-	it("does not restore the async widget from tool results when asyncWidget is disabled", () => {
+	it("does not restore the async widget from tool results by default", () => {
 		const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagents-async-widget-config-"));
 		try {
 			const configDir = path.join(agentDir, "extensions", "pi-subagent");
 			fs.mkdirSync(configDir, { recursive: true });
-			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ asyncWidget: false }), "utf-8");
+			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({}), "utf-8");
 			const script = String.raw`
 				import registerSubagentExtension from "./index.ts";
 				const eventHandlers = new Map();
@@ -229,7 +229,7 @@ describe("subagent extension child mode", () => {
 				eventHandlers.get("subagent:async-started")({ id: "widget-run", pid: 1, sessionId: "session-widget", mode: "single", agent: "worker", asyncDir: "/tmp/widget-run" });
 				handlers.get("tool_result")({ toolName: "subagent" }, ctx);
 				const asyncWidgets = widgets.filter((entry) => entry.key === "subagent-async");
-				if (asyncWidgets.length < 2 || asyncWidgets.some((entry) => entry.value !== undefined)) throw new Error("async widget rendered despite disabled config: " + JSON.stringify(asyncWidgets));
+				if (asyncWidgets.length < 2 || asyncWidgets.some((entry) => entry.value !== undefined)) throw new Error("async widget rendered despite default-disabled config: " + JSON.stringify(asyncWidgets));
 				handlers.get("session_shutdown")();
 			`;
 			const env = parentToolEnv();
@@ -240,12 +240,12 @@ describe("subagent extension child mode", () => {
 		}
 	});
 
-	it("shows active async work in the under-editor widget when FleetView is enabled", () => {
+	it("shows active async work in the under-editor widget when explicitly enabled with FleetView", () => {
 		const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-subagents-async-widget-fleet-"));
 		try {
 			const configDir = path.join(agentDir, "extensions", "pi-subagent");
 			fs.mkdirSync(configDir, { recursive: true });
-			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ fleetView: true }), "utf-8");
+			fs.writeFileSync(path.join(configDir, "config.json"), JSON.stringify({ fleetView: true, asyncWidget: true }), "utf-8");
 			const script = String.raw`
 				import registerSubagentExtension from "./index.ts";
 				const eventHandlers = new Map();
@@ -270,7 +270,7 @@ describe("subagent extension child mode", () => {
 				eventHandlers.get("subagent:async-started")({ id: "widget-run", pid: 1, sessionId: "session-widget", mode: "workflow", agent: "worker", asyncDir: "/tmp/widget-run" });
 				handlers.get("tool_result")({ toolName: "subagent" }, ctx);
 				const asyncWidgets = widgets.filter((entry) => entry.key === "subagent-async");
-				if (!asyncWidgets.some((entry) => entry.value !== undefined)) throw new Error("async widget was not rendered with FleetView enabled: " + JSON.stringify(asyncWidgets));
+				if (!asyncWidgets.some((entry) => entry.value !== undefined)) throw new Error("explicitly enabled async widget was not rendered with FleetView: " + JSON.stringify(asyncWidgets));
 				handlers.get("session_shutdown")();
 			`;
 			const env = parentToolEnv();

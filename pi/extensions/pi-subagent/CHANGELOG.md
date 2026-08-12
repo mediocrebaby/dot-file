@@ -34,10 +34,11 @@
 - Scripted workflows now start asynchronously by default as first-class status/fleet runs, stream trace and emitted progress, support stop by workflow id, preserve async child parentage, and present single + workflow as the public authoring surface.
 - `runs.ref()` now returns concise `[run <key>; id=<short-id>]` references; callers that need artifact, session, or handoff paths should read the child result `artifactPaths` or the corresponding status artifacts.
 - Scheduled subagent runs are now enabled by default; set `{ "scheduledRuns": { "enabled": false } }` to opt out.
+- The under-editor async status widget is now hidden by default; set `{ "asyncWidget": true }` to opt in without affecting FleetView, background execution, or completion notifications.
 
 ### Fixed
 - Wake the originating parent session after successful async completion notifications, while preserving visually quiet rendering and explicit `triggerTurn: false` delivery for recovery backlogs.
-- Keep the under-editor async status widget visible by default while FleetView is enabled, including after active runs restore following reload. Thanks to @nicobailon for #804.
+- Keep the explicitly enabled under-editor async status widget available alongside FleetView, including after active runs restore following reload. Thanks to @nicobailon for #804.
 - Restore active under-editor subagent status after management calls, so `status` and `list` do not hide running disk-backed work. Thanks to @nicobailon for #816.
 - Allow direct single-child `worktree: true` launches to use managed isolation without requiring `workflowScript`. Thanks to @nicobailon for #808.
 - Isolated each mock Pi test queue so late child processes cannot consume or lose responses after the next test resets the harness. Thanks to @nicobailon for #810.

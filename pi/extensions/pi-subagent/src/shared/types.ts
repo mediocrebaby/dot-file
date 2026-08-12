@@ -1728,7 +1728,7 @@ export interface ExtensionConfig {
 	fleetView?: boolean;
 	/** Place the persistent FleetView above or below the editor. Defaults to belowEditor. */
 	fleetViewPlacement?: FleetViewPlacement;
-	/** Show the under-editor async runs widget. Defaults to true, including when FleetView is enabled. */
+	/** Show the under-editor async runs widget. Defaults to false. */
 	asyncWidget?: boolean;
 	/** Tool description variant registered for the parent-facing subagent tool. Defaults to full. */
 	toolDescriptionMode?: ToolDescriptionMode;
