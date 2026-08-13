@@ -362,6 +362,8 @@ async function runParallelChainTasks(input: ParallelChainRunInput): Promise<Sing
 				: undefined;
 			taskStr = injectSingleOutputInstruction(taskStr, outputPath, taskAgentConfig);
 			const interruptController = new AbortController();
+			const childSessionFile = input.sessionFileForTask?.(task.agent, childIndex, effectiveModel)
+				?? input.sessionFileForIndex?.(childIndex);
 			if (input.foregroundControl) {
 				const thinking = resolveEffectiveThinking(effectiveModel, input.thinkingOverrideForTask?.(task.agent, childIndex, effectiveModel));
 				beginForegroundChild(input.foregroundControl, {
@@ -370,6 +372,7 @@ async function runParallelChainTasks(input: ParallelChainRunInput): Promise<Sing
 					description: cleanTask.trim(),
 					...(effectiveModel ? { model: effectiveModel } : {}),
 					...(thinking ? { thinking } : {}),
+					...(childSessionFile ? { sessionFile: childSessionFile } : {}),
 					interrupt: () => {
 						if (interruptController.signal.aborted) return false;
 						interruptController.abort();
@@ -397,8 +400,7 @@ async function runParallelChainTasks(input: ParallelChainRunInput): Promise<Sing
 				runId: input.runId,
 				index: childIndex,
 				sessionDir: input.sessionDirForIndex(childIndex),
-				sessionFile: input.sessionFileForTask?.(task.agent, childIndex, effectiveModel)
-					?? input.sessionFileForIndex?.(childIndex),
+				sessionFile: childSessionFile,
 				thinkingOverride: input.thinkingOverrideForTask?.(task.agent, childIndex, effectiveModel),
 				share: input.shareEnabled,
 				artifactsDir: input.artifactConfig.enabled ? input.artifactsDir : undefined,
@@ -1325,6 +1327,8 @@ ${step.message}` : ""}` }],
 			const maxSubagentDepth = resolveChildMaxSubagentDepth(params.maxSubagentDepth, agentConfig.maxSubagentDepth);
 			const childIndex = globalTaskIndex;
 			const interruptController = new AbortController();
+			const childSessionFile = sessionFileForTask?.(seqStep.agent, childIndex, effectiveModel)
+				?? sessionFileForIndex?.(childIndex);
 			if (foregroundControl) {
 				const thinking = resolveEffectiveThinking(effectiveModel, params.thinkingOverrideForTask?.(seqStep.agent, childIndex, effectiveModel));
 				beginForegroundChild(foregroundControl, {
@@ -1333,6 +1337,7 @@ ${step.message}` : ""}` }],
 					description: cleanTask.trim(),
 					...(effectiveModel ? { model: effectiveModel } : {}),
 					...(thinking ? { thinking } : {}),
+					...(childSessionFile ? { sessionFile: childSessionFile } : {}),
 					interrupt: () => {
 						if (interruptController.signal.aborted) return false;
 						interruptController.abort();
@@ -1377,8 +1382,7 @@ ${step.message}` : ""}` }],
 				runId,
 				index: childIndex,
 				sessionDir: sessionDirForIndex(childIndex),
-				sessionFile: sessionFileForTask?.(seqStep.agent, childIndex, effectiveModel)
-					?? sessionFileForIndex?.(childIndex),
+				sessionFile: childSessionFile,
 				thinkingOverride: thinkingOverrideForTask?.(seqStep.agent, childIndex, effectiveModel),
 				share: shareEnabled,
 				artifactsDir: artifactConfig.enabled ? artifactsDir : undefined,

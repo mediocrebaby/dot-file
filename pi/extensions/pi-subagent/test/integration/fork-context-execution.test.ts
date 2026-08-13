@@ -132,6 +132,7 @@ describe("fork context execution wiring", { skip: !available ? "subagent executo
 	function makeExecutorWithDiscoverAgents(discoverAgentsImpl: typeof discoverAgents, config: Record<string, unknown> = {}) {
 		let sessionName: string | undefined;
 		const eventsApi = createEventBus();
+		const state = makeState(tempDir);
 		return Object.assign(createSubagentExecutor({
 			pi: {
 				events: eventsApi,
@@ -141,14 +142,14 @@ describe("fork context execution wiring", { skip: !available ? "subagent executo
 				},
 				sendMessage: () => {},
 			},
-			state: makeState(tempDir),
+			state,
 			config,
 			asyncByDefault: false,
 			tempArtifactsDir: tempDir,
 			getSubagentSessionRoot: () => tempDir,
 			expandTilde: (p: string) => p,
 			discoverAgents: discoverAgentsImpl,
-		}), { eventsApi });
+		}), { eventsApi, state });
 	}
 
 	function readCallArgs(): string[] {
@@ -1069,6 +1070,8 @@ describe("fork context execution wiring", { skip: !available ? "subagent executo
 		assert.equal(mockPi.callCount(), 3);
 		assert.equal(readSessionArg(readCallArgsForTask("inspect one")), path.join(tempDir, "fork-1.jsonl"));
 		assert.equal(readSessionArg(readCallArgsForTask("final")), path.join(tempDir, "fork-4.jsonl"));
+		const remembered = executor.state.foregroundRuns?.get(result.details.runId!);
+		assert.equal(typeof remembered?.children[2]?.startedAt, "number", "compressed result rows must retain the final child's reserved-index launch boundary");
 	});
 
 	it("reports unknown top-level parallel agents before default-fork preconditions", async () => {
@@ -1772,6 +1775,7 @@ describe("fork context execution wiring", { skip: !available ? "subagent executo
 					{ agent: "echo", task: "step 1" },
 					{ parallel: [{ agent: "echo", task: "p1", count: 2 }, { agent: "second", task: "p2", count: 2 }] },
 					{ agent: "second", task: "step 3" },
+					{ checkpoint: "review" },
 				],
 				context: "fork",
 				clarify: false,

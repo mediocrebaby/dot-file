@@ -1164,6 +1164,10 @@ export interface AsyncStartedEvent {
 	asyncDir?: string;
 	/** Parent-resolved launch directory, used as a trusted artifact root while this session is live. */
 	cwd?: string;
+	/** Parent-side boundary captured before the async runner is spawned. */
+	startedAt?: number;
+	/** Exact child session files resolved by the parent at launch, indexed by flat child index. */
+	sessionFiles?: Array<string | undefined>;
 	pid?: number;
 	sessionId?: string;
 	mode?: SubagentRunMode;
@@ -1357,6 +1361,8 @@ export interface AsyncJobState {
 	asyncDir: string;
 	/** Parent-resolved launch directory retained for trusted live artifact lookup. */
 	cwd?: string;
+	/** Parent-owned exact child session files, indexed by flat child index. */
+	sessionFiles?: Array<string | undefined>;
 	status: "queued" | "running" | "complete" | "failed" | "paused" | "stopped" | "rejected";
 	/** Short caller-facing task/goal shown in fleet surfaces when available. */
 	description?: string;
@@ -1413,6 +1419,8 @@ export interface ForegroundResumeChild {
 	agent: string;
 	index: number;
 	context?: "fresh" | "fork";
+	/** Child launch boundary used to exclude inherited fork/revival history. */
+	startedAt?: number;
 	sessionFile?: string;
 	model?: string;
 	thinking?: string;
@@ -1466,6 +1474,8 @@ export interface ForegroundChildControl {
 	description?: string;
 	startedAt: number;
 	updatedAt: number;
+	/** Exact runtime-owned child session file used by Fleet while the child is live. */
+	sessionFile?: string;
 	currentActivityState?: ActivityState;
 	lastActivityAt?: number;
 	currentTool?: string;
@@ -1509,6 +1519,8 @@ export interface ForegroundRunControl {
 	toolCount?: number;
 	/** Independently tracked children for foreground parallel work and fleet inspection. */
 	activeChildren?: Map<number, ForegroundChildControl>;
+	/** Stable launch boundaries retained after active child controls settle. */
+	childStartedAt?: Map<number, number>;
 	/** Scheduling owners that may still launch another child. Removal is safe only at zero. */
 	schedulingOwners?: number;
 	nestedRoute?: NestedRouteInfo;
@@ -1533,6 +1545,8 @@ export interface SubagentState {
 	currentSessionId: string | null;
 	/** Runtime-owned artifact resolution inputs used by Fleet transcript targeting. */
 	artifactDirPreference?: ArtifactDirPreference;
+	/** Trusted base directory for child session transcripts shown by Fleet. */
+	subagentSessionRoot?: string;
 	/** Runtime authority snapshot used by optional inspector controls. */
 	authorityPolicy?: AuthorityPolicyConfig;
 	/** Runtime mission-store snapshot used by optional inspector context. */

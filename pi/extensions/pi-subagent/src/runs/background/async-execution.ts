@@ -1013,6 +1013,7 @@ export function executeAsyncChain(
 		return "agent" in step ? [childIntercomTarget(step.agent, childTargetIndex++)] : [undefined];
 	}) : undefined;
 
+	const launchStartedAt = Date.now();
 	let spawnResult: { pid?: number; error?: string } = {};
 	try {
 		spawnResult = spawnRunner(
@@ -1145,6 +1146,8 @@ export function executeAsyncChain(
 			lifecycleArtifactVersion: SUBAGENT_LIFECYCLE_ARTIFACT_VERSION,
 			id,
 			pid: spawnResult.pid,
+			...(sessionFilesByFlatIndex?.some(Boolean) ? { sessionFiles: sessionFilesByFlatIndex } : {}),
+			startedAt: launchStartedAt,
 			sessionId: ctx.currentSessionId,
 			mode: resultMode,
 			agent: firstAgents[0],
@@ -1389,6 +1392,7 @@ export function executeAsyncSingle(
 			return formatAsyncStartError("single", `Failed to persist async recovery descriptor for '${id}': ${error instanceof Error ? error.message : String(error)}`);
 		}
 	}
+	const launchStartedAt = Date.now();
 	let spawnResult: { pid?: number; error?: string } = {};
 	try {
 		spawnResult = spawnRunner(
@@ -1525,6 +1529,8 @@ export function executeAsyncSingle(
 			lifecycleArtifactVersion: SUBAGENT_LIFECYCLE_ARTIFACT_VERSION,
 			id,
 			pid: spawnResult.pid,
+			...(sessionFile ? { sessionFiles: [sessionFile] } : {}),
+			startedAt: launchStartedAt,
 			sessionId: ctx.currentSessionId,
 			mode: "single",
 			agent,

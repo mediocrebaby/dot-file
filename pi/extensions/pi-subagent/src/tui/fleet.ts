@@ -2,7 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import { getMarkdownTheme, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key, matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { matchesKey, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Component, type MarkdownTheme } from "@earendil-works/pi-tui";
 import { getArtifactPaths, getArtifactsDir } from "../shared/artifacts.ts";
 import { formatDuration, formatModelThinking, formatTokens, shortenPath } from "../shared/formatters.ts";
 import { DIRS, type AsyncJobState, type Details, type ForegroundChildControl, type ForegroundResumeChild, type ForegroundResumeRun, type ForegroundRunControl, type SubagentState } from "../shared/types.ts";
@@ -20,6 +20,7 @@ const REFRESH_MS = 750;
 const MAX_RECENT_ASYNC_RUNS = 20;
 const MAX_FLEET_HISTORY_CANDIDATES = 100;
 const TRANSCRIPT_LINES = 200;
+const CHILD_SESSION_FILE = "session.jsonl";
 
 type Theme = ExtensionContext["ui"]["theme"];
 type FleetTui = {
@@ -27,6 +28,7 @@ type FleetTui = {
 	requestRender(): void;
 };
 type AsyncStep = AsyncRunSummary["steps"][number];
+type FleetPane = "agents" | "detail";
 
 export type FleetItem = (
 	| { key: string; kind: "foreground-active"; runId: string; index?: number; agent: string; state: "running"; updatedAt: number; control: ForegroundRunControl; activeChild?: ForegroundChildControl }
@@ -338,41 +340,119 @@ function fleetArtifactsRoot(state: SubagentState, cwd: string): string {
 	);
 }
 
-function transcriptTarget(item: FleetItem, state: SubagentState): { path: string; trustedRoots: string[] } | undefined {
+interface FleetTranscriptTarget {
+	path: string;
+	trustedRoots: string[];
+	/** Native session records before this launch boundary belong to inherited history. */
+	startedAt?: number;
+}
+
+function fleetSessionRoots(state: SubagentState): string[] {
+	const parentSessionRoot = state.parentSessionFile
+		? path.join(path.dirname(state.parentSessionFile), path.basename(state.parentSessionFile, path.extname(state.parentSessionFile)))
+		: undefined;
+	return uniquePaths([state.subagentSessionRoot, parentSessionRoot]);
+}
+
+function addTranscriptTarget(
+	targets: FleetTranscriptTarget[],
+	filePath: string | undefined,
+	trustedRoots: string[],
+	startedAt?: number,
+): void {
+	if (!filePath || targets.some((target) => path.resolve(target.path) === path.resolve(filePath))) return;
+	targets.push({
+		path: filePath,
+		trustedRoots: uniquePaths(trustedRoots),
+		...(startedAt !== undefined ? { startedAt } : {}),
+	});
+}
+
+function transcriptTargets(item: FleetItem, state: SubagentState): FleetTranscriptTarget[] {
+	const targets: FleetTranscriptTarget[] = [];
+	const sessionRoots = fleetSessionRoots(state);
 	if (item.kind === "foreground-active") {
 		const artifactsRoot = fleetArtifactsRoot(state, item.control.cwd ?? state.baseCwd);
-		return {
-			path: getArtifactPaths(artifactsRoot, item.runId, item.agent, item.index ?? 0).transcriptPath,
-			trustedRoots: [artifactsRoot],
-		};
+		addTranscriptTarget(
+			targets,
+			getArtifactPaths(artifactsRoot, item.runId, item.agent, item.index ?? 0).transcriptPath,
+			[artifactsRoot],
+		);
+		const runtimeSessionFile = item.activeChild?.sessionFile;
+		if (runtimeSessionFile) {
+			addTranscriptTarget(targets, runtimeSessionFile, [runtimeSessionFile], item.activeChild?.startedAt ?? item.control.startedAt);
+		} else {
+			const runSessionRoot = state.subagentSessionRoot ? path.join(state.subagentSessionRoot, item.runId) : undefined;
+			addTranscriptTarget(
+				targets,
+				runSessionRoot ? path.join(runSessionRoot, `run-${item.index ?? 0}`, CHILD_SESSION_FILE) : undefined,
+				sessionRoots,
+				item.activeChild?.startedAt ?? item.control.startedAt,
+			);
+		}
+		return targets;
 	}
 	if (item.kind === "foreground-recent") {
-		if (!item.child.transcriptPath) return undefined;
-		const transcriptPath = path.isAbsolute(item.child.transcriptPath)
-			? item.child.transcriptPath
-			: path.resolve(item.run.cwd, item.child.transcriptPath);
-		return {
-			path: transcriptPath,
-			trustedRoots: uniquePaths([
-				fleetArtifactsRoot(state, item.run.cwd),
-				fleetArtifactsRoot(state, state.baseCwd),
-			]),
-		};
+		const transcriptPath = item.child.transcriptPath
+			? path.isAbsolute(item.child.transcriptPath)
+				? item.child.transcriptPath
+				: path.resolve(item.run.cwd, item.child.transcriptPath)
+			: undefined;
+		addTranscriptTarget(targets, transcriptPath, [
+			fleetArtifactsRoot(state, item.run.cwd),
+			fleetArtifactsRoot(state, state.baseCwd),
+		]);
+		const sessionFile = item.child.sessionFile
+			? path.isAbsolute(item.child.sessionFile)
+				? item.child.sessionFile
+				: path.resolve(item.run.cwd, item.child.sessionFile)
+			: undefined;
+		addTranscriptTarget(targets, sessionFile, sessionFile ? [sessionFile] : [], item.child.startedAt);
+		return targets;
 	}
 	const step = item.step ?? (item.run.steps.length === 1 ? item.run.steps[0] : undefined);
-	if (!step?.transcriptPath) return undefined;
-	const transcriptPath = path.isAbsolute(step.transcriptPath)
-		? step.transcriptPath
-		: path.resolve(item.run.asyncDir, step.transcriptPath);
 	const trackedJob = state.fleetJobs?.get(item.runId) ?? state.asyncJobs.get(item.runId);
-	return {
-		path: transcriptPath,
-		trustedRoots: uniquePaths([
-			item.run.asyncDir,
-			fleetArtifactsRoot(state, state.baseCwd),
-			trackedJob?.cwd ? fleetArtifactsRoot(state, trackedJob.cwd) : undefined,
-		]),
-	};
+	const artifactRoots = uniquePaths([
+		item.run.asyncDir,
+		fleetArtifactsRoot(state, state.baseCwd),
+		trackedJob?.cwd ? fleetArtifactsRoot(state, trackedJob.cwd) : undefined,
+	]);
+	const transcriptPath = step?.transcriptPath
+		? path.isAbsolute(step.transcriptPath)
+			? step.transcriptPath
+			: path.resolve(item.run.asyncDir, step.transcriptPath)
+		: undefined;
+	addTranscriptTarget(targets, transcriptPath, artifactRoots);
+	const childIndex = item.index ?? 0;
+	const ownedSessionFilesByIndex = (trackedJob?.sessionFiles ?? []).map((file) => file ? path.resolve(file) : undefined);
+	const ownedSessionFiles = new Set(ownedSessionFilesByIndex.filter((file): file is string => Boolean(file)));
+	const reportedSessionFile = step?.sessionFile ?? (item.index === undefined ? item.run.sessionFile : undefined);
+	const resolvedReportedSessionFile = reportedSessionFile ? path.resolve(item.run.asyncDir, reportedSessionFile) : undefined;
+	const hasRuntimeOwnership = ownedSessionFiles.size > 0;
+	// Dynamic fanout materializes fewer children than its planned maxItems and shifts
+	// later status indexes. Prefer the runtime-reported step path, but when the live
+	// parent supplied an ownership set, reject paths outside it rather than widening
+	// trust to a sibling session under the same directory.
+	if (resolvedReportedSessionFile) {
+		if (ownedSessionFiles.has(resolvedReportedSessionFile)) {
+			addTranscriptTarget(targets, resolvedReportedSessionFile, [resolvedReportedSessionFile], step?.startedAt ?? item.run.startedAt);
+		} else if (!hasRuntimeOwnership) {
+			addTranscriptTarget(targets, resolvedReportedSessionFile, [...sessionRoots, item.run.asyncDir], step?.startedAt ?? item.run.startedAt);
+		}
+		return targets;
+	}
+	// Only top-level single/parallel modes retain stable status indexes. Preserve
+	// sparse array positions here; filtering or deduplicating would retarget a child.
+	const safeIndexedFallback = item.run.mode === "single" || item.run.mode === "parallel"
+		? ownedSessionFilesByIndex[childIndex]
+		: undefined;
+	addTranscriptTarget(
+		targets,
+		safeIndexedFallback,
+		safeIndexedFallback ? [safeIndexedFallback] : [],
+		step?.startedAt ?? item.run.startedAt,
+	);
+	return targets;
 }
 
 function itemContext(item: FleetItem): string | undefined {
@@ -481,6 +561,7 @@ export class SubagentFleetComponent implements Component {
 	private detailLineCount = 0;
 	private detailViewportHeight = 8;
 	private bodyHeight = 8;
+	private focusedPane: FleetPane = "agents";
 	private expandedTools = false;
 	private actionNotice: FleetActionResult | undefined;
 	private steerDraft: string | undefined;
@@ -593,10 +674,26 @@ export class SubagentFleetComponent implements Component {
 			});
 	}
 
+	private focusPane(pane: FleetPane): void {
+		if (this.focusedPane === pane) return;
+		this.focusedPane = pane;
+		this.tui.requestRender();
+	}
+
 	private scrollDetail(delta: number): void {
+		this.scrollDetailTo(this.detailScroll + delta);
+	}
+
+	private scrollDetailTo(position: number): void {
 		const maxScroll = Math.max(0, this.detailLineCount - this.detailViewportHeight);
-		this.detailScroll = Math.max(0, Math.min(maxScroll, this.detailScroll + delta));
+		this.detailScroll = Math.max(0, Math.min(maxScroll, position));
 		this.detailAutoFollow = this.detailScroll >= maxScroll;
+		this.tui.requestRender();
+	}
+
+	private toggleExpandedTools(): void {
+		this.expandedTools = !this.expandedTools;
+		this.transcriptCache = undefined;
 		this.tui.requestRender();
 	}
 
@@ -652,14 +749,24 @@ export class SubagentFleetComponent implements Component {
 			this.done(undefined);
 			return;
 		}
-		if (matchesKey(data, Key.shift("k"))) return this.scrollDetail(-1);
-		if (matchesKey(data, Key.shift("j"))) return this.scrollDetail(1);
-		if (matchesKey(data, "up") || matchesKey(data, "k")) return this.moveSelection(-1);
-		if (matchesKey(data, "down") || matchesKey(data, "j")) return this.moveSelection(1);
-		if (matchesKey(data, "home")) return this.moveSelection(-this.snapshot.items.length);
-		if (matchesKey(data, "end")) return this.moveSelection(this.snapshot.items.length);
-		if (matchesKey(data, "pageUp")) return this.scrollDetail(-this.detailViewportHeight);
-		if (matchesKey(data, "pageDown")) return this.scrollDetail(this.detailViewportHeight);
+		if (matchesKey(data, "left")) return this.focusPane("agents");
+		if (matchesKey(data, "right")) return this.focusPane("detail");
+		if (this.focusedPane === "agents") {
+			if (matchesKey(data, "up") || matchesKey(data, "k")) return this.moveSelection(-1);
+			if (matchesKey(data, "down") || matchesKey(data, "j")) return this.moveSelection(1);
+			if (matchesKey(data, "home")) return this.moveSelection(-this.snapshot.items.length);
+			if (matchesKey(data, "end")) return this.moveSelection(this.snapshot.items.length);
+			if (matchesKey(data, "pageUp")) return this.moveSelection(-this.bodyHeight);
+			if (matchesKey(data, "pageDown")) return this.moveSelection(this.bodyHeight);
+		} else {
+			if (matchesKey(data, "up") || matchesKey(data, "k")) return this.scrollDetail(-1);
+			if (matchesKey(data, "down") || matchesKey(data, "j")) return this.scrollDetail(1);
+			if (matchesKey(data, "home")) return this.scrollDetailTo(0);
+			if (matchesKey(data, "end")) return this.scrollDetailTo(this.detailLineCount);
+			if (matchesKey(data, "pageUp")) return this.scrollDetail(-this.detailViewportHeight);
+			if (matchesKey(data, "pageDown")) return this.scrollDetail(this.detailViewportHeight);
+			if (data.toLowerCase() === "o") return this.toggleExpandedTools();
+		}
 		if (data.toLowerCase() === "r") {
 			this.transcriptCache = undefined;
 			this.refresh();
@@ -696,11 +803,7 @@ export class SubagentFleetComponent implements Component {
 			}
 			return;
 		}
-		if (data.toLowerCase() === "x" || matchesKey(data, "ctrl+o")) {
-			this.expandedTools = !this.expandedTools;
-			this.transcriptCache = undefined;
-			this.tui.requestRender();
-		}
+		if (data.toLowerCase() === "x" || matchesKey(data, "ctrl+o")) this.toggleExpandedTools();
 	}
 
 	private rosterLines(width: number): string[] {
@@ -717,8 +820,8 @@ export class SubagentFleetComponent implements Component {
 		});
 	}
 
-	private renderedTranscript(target: { path: string; trustedRoots: string[] }, width: number): { transcript: FleetTranscript; body: string[] } {
-		const fingerprint = `${target.trustedRoots.join("\0")}|${transcriptFingerprint(target.path)}`;
+	private renderedTranscript(target: FleetTranscriptTarget, width: number): { transcript: FleetTranscript; body: string[] } {
+		const fingerprint = `${target.trustedRoots.join("\0")}|${target.startedAt ?? ""}|${transcriptFingerprint(target.path)}`;
 		if (this.transcriptCache
 			&& this.transcriptCache.path === target.path
 			&& this.transcriptCache.fingerprint === fingerprint
@@ -726,7 +829,10 @@ export class SubagentFleetComponent implements Component {
 			&& this.transcriptCache.expandedTools === this.expandedTools) {
 			return { transcript: this.transcriptCache.transcript, body: [...this.transcriptCache.body] };
 		}
-		const transcript = readFleetTranscript(target.path, { trustedRoots: target.trustedRoots });
+		const transcript = readFleetTranscript(target.path, {
+			trustedRoots: target.trustedRoots,
+			...(target.startedAt !== undefined ? { startedAt: target.startedAt } : {}),
+		});
 		const body = transcript.events.length > 0
 			? renderFleetTranscript(transcript, width, this.theme, this.markdownTheme, { expandedTools: this.expandedTools })
 			: [];
@@ -738,23 +844,23 @@ export class SubagentFleetComponent implements Component {
 		const selected = this.snapshot.items[this.selected];
 		let transcriptWarning: string | undefined;
 		if (selected) {
-			const target = transcriptTarget(selected, this.state);
-			if (target) {
+			const warnings: string[] = [];
+			for (const target of transcriptTargets(selected, this.state)) {
 				const { transcript, body } = this.renderedTranscript(target, width);
-				transcriptWarning = transcript.warning;
-				if (transcript.events.length > 0) {
-					if (this.snapshot.error) body.unshift(this.theme.fg("warning", `Fleet scan warning: ${this.snapshot.error}`), "");
-					const latest = transcript.events.at(-1);
-					const conversationState = latest?.kind === "assistant"
-						? "assistant response"
-						: latest?.kind === "user"
-							? "supervisor message"
-							: latest?.kind === "tool"
-								? `${latest.name} · ${latest.status}`
-								: "activity";
-					return { header: structuredHeader(selected, width, this.theme, conversationState), body: this.withActionLines(body) };
-				}
+				if (transcript.warning) warnings.push(transcript.warning);
+				if (transcript.events.length === 0) continue;
+				if (this.snapshot.error) body.unshift(this.theme.fg("warning", `Fleet scan warning: ${this.snapshot.error}`), "");
+				const latest = transcript.events.at(-1);
+				const conversationState = latest?.kind === "assistant"
+					? "assistant response"
+					: latest?.kind === "user"
+						? latest.input ? "model input" : "supervisor message"
+						: latest?.kind === "tool"
+							? `${latest.name} · ${latest.status}`
+							: "activity";
+				return { header: structuredHeader(selected, width, this.theme, conversationState), body: this.withActionLines(body) };
 			}
+			transcriptWarning = warnings.join(" ") || undefined;
 		}
 
 		const raw = detailLines(selected, this.snapshot.error);
@@ -774,6 +880,15 @@ export class SubagentFleetComponent implements Component {
 			lines.push(...(wrapped.length ? wrapped : [""]));
 		}
 		return { header: [], body: this.withActionLines(lines) };
+	}
+
+	private paneBorder(pane: FleetPane, text: string): string {
+		return this.theme.fg(this.focusedPane === pane ? "accent" : "border", text);
+	}
+
+	private paneRule(pane: FleetPane, label: string, width: number): string {
+		const prefix = `─ ${this.theme.bold(label)} `;
+		return this.paneBorder(pane, `${prefix}${"─".repeat(Math.max(0, width - label.length - 3))}`);
 	}
 
 	render(width: number): string[] {
@@ -802,19 +917,34 @@ export class SubagentFleetComponent implements Component {
 			? `${statusGlyph(selected, this.theme)} ${selected.agent} · ${selected.state} `
 			: this.theme.fg("dim", "no children ");
 		lines.push(this.theme.fg("border", "│") + rightAligned(title, selectedStatus, innerWidth) + this.theme.fg("border", "│"));
-		lines.push(this.theme.fg("border", `├${"─".repeat(rosterWidth)}┬${"─".repeat(detailWidth)}┤`));
+		lines.push(
+			this.paneBorder("agents", "├")
+				+ this.paneRule("agents", "Agents", rosterWidth)
+				+ this.theme.fg("accent", "┬")
+				+ this.paneRule("detail", "Detail", detailWidth)
+				+ this.paneBorder("detail", "┤"),
+		);
 		for (let index = 0; index < this.bodyHeight; index++) {
 			lines.push(
-				this.theme.fg("border", "│")
-				+ fit(roster[index] ?? "", rosterWidth)
-				+ this.theme.fg("border", "│")
-				+ fit(visibleDetails[index] ?? "", detailWidth)
-				+ this.theme.fg("border", "│"),
+				this.paneBorder("agents", "│")
+					+ fit(roster[index] ?? "", rosterWidth)
+					+ this.theme.fg("accent", "│")
+					+ fit(visibleDetails[index] ?? "", detailWidth)
+					+ this.paneBorder("detail", "│"),
 			);
 		}
-		lines.push(this.theme.fg("border", `├${"─".repeat(rosterWidth)}┴${"─".repeat(detailWidth)}┤`));
+		lines.push(
+			this.paneBorder("agents", "├")
+				+ this.paneBorder("agents", "─".repeat(rosterWidth))
+				+ this.theme.fg("accent", "┴")
+				+ this.paneBorder("detail", "─".repeat(detailWidth))
+				+ this.paneBorder("detail", "┤"),
+		);
 		const position = this.snapshot.items.length ? `${this.selected + 1}/${this.snapshot.items.length}` : "0/0";
-		const footer = ` ↑↓/jk agent · H Herdr · s steer · D stop · x/Ctrl+O tools · r refresh · Esc close · ${position}`;
+		const navigation = this.focusedPane === "agents"
+			? "↑↓/jk agent · x/Ctrl+O tools"
+			: "↑↓/jk scroll · o/x/Ctrl+O tools";
+		const footer = ` ←→ focus · ${navigation} · H/s/D · r · Esc · ${position}`;
 		lines.push(this.theme.fg("border", "│") + fit(this.theme.fg("dim", footer), innerWidth) + this.theme.fg("border", "│"));
 		lines.push(this.theme.fg("border", `╰${"─".repeat(innerWidth)}╯`));
 		return lines.map((line) => truncateToWidth(line, width));

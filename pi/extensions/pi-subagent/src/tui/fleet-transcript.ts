@@ -6,13 +6,14 @@ import { Markdown, truncateToWidth, visibleWidth, wrapTextWithAnsi, type Markdow
 const DEFAULT_MAX_RECORDS = 240;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 const MAX_MESSAGE_CHARS = 64 * 1024;
+const TOOL_ARGS_PREVIEW_CHARS = 240;
 const TOOL_PREVIEW_LINES = 7;
 
 type Theme = ExtensionContext["ui"]["theme"];
 
 export type FleetTranscriptEvent =
 	| { kind: "assistant"; text: string; model?: string; timestamp?: number }
-	| { kind: "user"; text: string; timestamp?: number }
+	| { kind: "user"; text: string; input?: boolean; timestamp?: number }
 	| { kind: "tool"; toolCallId?: string; name: string; args?: string; argsPayload?: string; output?: string; outputTruncated?: boolean; status: "running" | "complete" | "error"; error?: string; startedAt?: number; endedAt?: number; timestamp?: number }
 	| { kind: "notice"; text: string; tone: "muted" | "warning" | "error"; timestamp?: number };
 
@@ -25,6 +26,8 @@ export interface FleetTranscript {
 
 interface FleetTranscriptReadOptions {
 	trustedRoots: string[];
+	/** Exclude inherited native-session history written before this child launch. */
+	startedAt?: number;
 	maxRecords?: number;
 	maxBytes?: number;
 }
@@ -57,6 +60,47 @@ function stringValue(value: unknown): string | undefined {
 
 function numberValue(value: unknown): number | undefined {
 	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function timestampValue(record: Record<string, unknown>): number | undefined {
+	const numeric = numberValue(record.ts) ?? numberValue(record.timestamp);
+	if (numeric !== undefined) return numeric;
+	if (typeof record.timestamp !== "string") return undefined;
+	const parsed = Date.parse(record.timestamp);
+	return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function contentText(value: unknown): string | undefined {
+	if (typeof value === "string") return stringValue(value);
+	if (!Array.isArray(value)) return stringValue(objectValue(value)?.text);
+	const text = value.map((part) => {
+		if (typeof part === "string") return part;
+		const entry = objectValue(part);
+		return entry?.type === "text" ? stringValue(entry.text) ?? "" : "";
+	}).filter(Boolean).join("\n");
+	return stringValue(text);
+}
+
+function toolArgsPayload(value: unknown): string | undefined {
+	if (value === undefined) return undefined;
+	try {
+		return clipMessage(JSON.stringify(value, null, 2));
+	} catch {
+		return undefined;
+	}
+}
+
+function toolArgsPreview(value: unknown): string | undefined {
+	if (value === undefined) return undefined;
+	try {
+		const compact = JSON.stringify(value);
+		if (!compact || compact === "{}") return undefined;
+		return compact.length > TOOL_ARGS_PREVIEW_CHARS
+			? `${compact.slice(0, TOOL_ARGS_PREVIEW_CHARS)}…`
+			: compact;
+	} catch {
+		return undefined;
+	}
 }
 
 function pathWithin(base: string, candidate: string): boolean {
@@ -167,13 +211,91 @@ function appendTextEvent(
 	events: FleetTranscriptEvent[],
 	kind: "assistant" | "user",
 	text: string,
-	metadata: { model?: string; timestamp?: number },
+	metadata: { model?: string; input?: boolean; timestamp?: number },
 ): void {
 	const clipped = clipMessage(text.trim());
 	if (!clipped) return;
-	const previous = events.at(-1);
-	if (previous?.kind === kind && previous.text === clipped) return;
+	// Repeated model/user messages are meaningful; without a stable event identity,
+	// preserving both is safer than silently collapsing retries or repeated steering.
 	events.push({ kind, text: clipped, ...metadata });
+}
+
+function appendSessionAssistantContent(
+	events: FleetTranscriptEvent[],
+	message: Record<string, unknown>,
+	metadata: { model?: string; timestamp?: number },
+): void {
+	const content = message.content;
+	if (!Array.isArray(content)) {
+		const text = contentText(content);
+		if (text) appendTextEvent(events, "assistant", text, metadata);
+		return;
+	}
+	for (const rawPart of content) {
+		const part = objectValue(rawPart);
+		if (!part) continue;
+		if (part.type === "text") {
+			const text = stringValue(part.text);
+			if (text) appendTextEvent(events, "assistant", text, metadata);
+			continue;
+		}
+		if (part.type !== "toolCall" && part.type !== "tool_call") continue;
+		const name = stringValue(part.name) ?? stringValue(part.toolName) ?? "tool";
+		const args = part.arguments ?? part.args;
+		const argsPayload = toolArgsPayload(args);
+		const argsPreview = toolArgsPreview(args);
+		events.push({
+			kind: "tool",
+			...(stringValue(part.id) ? { toolCallId: stringValue(part.id) } : {}),
+			name,
+			...(argsPreview ? { args: argsPreview } : {}),
+			...(argsPayload ? { argsPayload } : {}),
+			status: "running",
+			...(metadata.timestamp !== undefined ? { timestamp: metadata.timestamp, startedAt: metadata.timestamp } : {}),
+		});
+	}
+}
+
+function activeNativeSessionLines(lines: string[], startedAt: number | undefined): string[] {
+	const parsed: Array<{ line: string; record?: Record<string, unknown> }> = lines.map((line) => {
+		try {
+			return { line, record: objectValue(JSON.parse(line)) };
+		} catch {
+			return { line };
+		}
+	});
+	const nativeMessages = parsed.filter((entry) => entry.record?.recordType === undefined && entry.record?.type === "message");
+	if (nativeMessages.length === 0) return lines;
+
+	const treeEntries: Array<{ line: string; record: Record<string, unknown> }> = [];
+	for (const entry of parsed) {
+		const record = entry.record;
+		if (record
+			&& record.recordType === undefined
+			&& typeof record.id === "string"
+			&& Object.prototype.hasOwnProperty.call(record, "parentId")) {
+			treeEntries.push({ line: entry.line, record });
+		}
+	}
+	const activeIds = new Set<string>();
+	if (treeEntries.length > 0) {
+		const byId = new Map(treeEntries.map(({ record }) => [record.id as string, record]));
+		let current: Record<string, unknown> | undefined = treeEntries.at(-1)?.record;
+		while (current && typeof current.id === "string" && !activeIds.has(current.id)) {
+			activeIds.add(current.id);
+			current = typeof current.parentId === "string" ? byId.get(current.parentId) : undefined;
+		}
+	}
+
+	return parsed.flatMap(({ line, record }) => {
+		if (!record || record.recordType !== undefined || record.type !== "message") return [line];
+		if (activeIds.size > 0 && (typeof record.id !== "string" || !activeIds.has(record.id))) return [];
+		if (startedAt !== undefined) {
+			const timestamp = timestampValue(record);
+			if (timestamp === undefined || timestamp < startedAt) return [];
+		}
+		return [line];
+	});
 }
 
 function parseTranscriptLines(lines: string[], conversationStarted = false): { events: FleetTranscriptEvent[]; malformed: number; explicitTruncation: boolean } {
@@ -197,7 +319,7 @@ function parseTranscriptLines(lines: string[], conversationStarted = false): { e
 		}
 
 		const recordType = stringValue(record.recordType);
-		const timestamp = numberValue(record.ts);
+		const timestamp = timestampValue(record);
 		if (recordType === "truncated") {
 			explicitTruncation = true;
 			continue;
@@ -226,11 +348,12 @@ function parseTranscriptLines(lines: string[], conversationStarted = false): { e
 			if (text) events.push({ kind: "notice", text: clipMessage(text), tone: "error", ...(timestamp !== undefined ? { timestamp } : {}) });
 			continue;
 		}
-		if (recordType !== "message") continue;
+		const nativeSessionMessage = recordType === undefined && record.type === "message";
+		if (recordType !== "message" && !nativeSessionMessage) continue;
 
 		const message = objectValue(record.message);
 		const role = stringValue(record.role) ?? stringValue(message?.role);
-		const text = stringValue(record.text) ?? stringValue(message?.text) ?? stringValue(message?.content);
+		const text = stringValue(record.text) ?? stringValue(message?.text) ?? contentText(message?.content);
 		if (role === "toolResult" || role === "tool_result") {
 			const toolCallId = stringValue(record.toolCallId) ?? stringValue(message?.toolCallId);
 			const name = stringValue(record.toolName) ?? stringValue(message?.toolName) ?? "tool";
@@ -260,14 +383,23 @@ function parseTranscriptLines(lines: string[], conversationStarted = false): { e
 		}
 		if (role === "assistant") {
 			assistantSeen = true;
-			if (text) appendTextEvent(events, "assistant", text, {
-				...(stringValue(record.model) ? { model: stringValue(record.model) } : {}),
+			const model = stringValue(record.model) ?? stringValue(message?.model);
+			const metadata = {
+				...(model ? { model } : {}),
 				...(timestamp !== undefined ? { timestamp } : {}),
-			});
+			};
+			if (nativeSessionMessage && message) appendSessionAssistantContent(events, message, metadata);
+			else if (text) appendTextEvent(events, "assistant", text, metadata);
 			continue;
 		}
-		if (role === "user" && assistantSeen && text) {
-			appendTextEvent(events, "user", text, timestamp !== undefined ? { timestamp } : {});
+		if (role === "user" && text) {
+			const initialPrompt = record.sourceEventType === "initial_prompt" || (nativeSessionMessage && !assistantSeen);
+			if (assistantSeen || initialPrompt) {
+				appendTextEvent(events, "user", text, {
+					...(initialPrompt ? { input: true } : {}),
+					...(timestamp !== undefined ? { timestamp } : {}),
+				});
+			}
 		}
 	}
 
@@ -285,7 +417,7 @@ export function readFleetTranscript(filePath: string, options: FleetTranscriptRe
 	const maxRecords = Math.max(1, options.maxRecords ?? DEFAULT_MAX_RECORDS);
 	const tail = readTailLines(validated.resolvedPath, Math.max(1024, options.maxBytes ?? DEFAULT_MAX_BYTES));
 	const recordsOmitted = tail.truncated || tail.lines.length > maxRecords;
-	const selectedLines = tail.lines.slice(-maxRecords);
+	const selectedLines = activeNativeSessionLines(tail.lines.slice(-maxRecords), options.startedAt);
 	const parsed = parseTranscriptLines(selectedLines, recordsOmitted);
 	const warnings = [
 		tail.warning,
@@ -413,7 +545,7 @@ export function renderFleetTranscript(
 		if (event.kind === "tool") {
 			if (options.expandedTools && (event.output || event.argsPayload || event.error)) {
 				lines.push(...renderExpandedTool(event, width, theme));
-				lines.push(railLine(theme.fg("dim", "  x to collapse"), width, theme));
+				lines.push(railLine(theme.fg("dim", "  o/x to collapse"), width, theme));
 				continue;
 			}
 			const title = theme.fg("toolTitle", theme.bold(event.name));
@@ -429,12 +561,12 @@ export function renderFleetTranscript(
 						lines.push(railLine(`  ${wrapped}`, width, theme));
 					}
 				}
-				if (hidden > 0) lines.push(railLine(theme.fg("dim", `  … ${hidden} earlier lines · x to expand`), width, theme));
+				if (hidden > 0) lines.push(railLine(theme.fg("dim", `  … ${hidden} earlier lines · o/x to expand`), width, theme));
 				const duration = toolDuration(event);
 				lines.push(railLine(theme.fg("dim", `  Took${duration ? ` ${duration}` : ""}`), width, theme));
 			} else if (event.output && event.status !== "error") {
 				const summary = truncateToWidth(event.output.replace(/\s+/g, " ").trim(), Math.max(1, width - 18), "…");
-				if (summary) lines.push(railLine(theme.fg("dim", `  ${summary} · x to expand`), width, theme));
+				if (summary) lines.push(railLine(theme.fg("dim", `  ${summary} · o/x to expand`), width, theme));
 			}
 			if (event.error) {
 				for (const errorLine of renderWrapped(event.error, Math.max(1, width - 4))) {
@@ -452,7 +584,7 @@ export function renderFleetTranscript(
 		}
 
 		const assistant = event.kind === "assistant";
-		const label = assistant ? "Assistant" : "Supervisor";
+		const label = assistant ? "Assistant" : event.input ? "Input" : "Supervisor";
 		const marker = assistant ? theme.fg("accent", "◆") : theme.fg("warning", "◇");
 		const model = assistant && event.model ? theme.fg("dim", ` · ${event.model}`) : "";
 		lines.push(bounded(`${marker} ${theme.bold(label)}${model}`, width));

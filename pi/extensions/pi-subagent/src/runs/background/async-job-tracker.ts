@@ -410,6 +410,9 @@ export function createAsyncJobTracker(pi: Pick<ExtensionAPI, "events">, state: S
 		if (typeof state.currentSessionId === "string" && info.sessionId !== state.currentSessionId) return;
 		const now = Date.now();
 		const asyncDir = info.asyncDir ?? path.join(asyncDirRoot, info.id);
+		const sessionFiles = Array.isArray(info.sessionFiles)
+			? info.sessionFiles.map((file) => typeof file === "string" ? path.resolve(file) : undefined)
+			: undefined;
 		const rawAgents = info.agents?.length ? info.agents : info.chain && info.chain.length > 0 ? info.chain : info.agent ? [info.agent] : undefined;
 		const validParallelGroups = normalizeParallelGroups(info.parallelGroups, Number.MAX_SAFE_INTEGER, info.chainStepCount ?? Number.MAX_SAFE_INTEGER);
 		const firstGroup = validParallelGroups.find((group) => group.start === 0);
@@ -421,6 +424,7 @@ export function createAsyncJobTracker(pi: Pick<ExtensionAPI, "events">, state: S
 			asyncId: info.id,
 			asyncDir,
 			...(typeof info.cwd === "string" ? { cwd: path.resolve(info.cwd) } : {}),
+			...(sessionFiles?.some(Boolean) ? { sessionFiles } : {}),
 			status: "queued",
 			pid: typeof info.pid === "number" ? info.pid : undefined,
 			...(typeof info.sessionId === "string" ? { sessionId: info.sessionId } : {}),
@@ -433,7 +437,7 @@ export function createAsyncJobTracker(pi: Pick<ExtensionAPI, "events">, state: S
 			stepsTotal: firstGroupCount ?? agents?.length,
 			hasParallelGroups: validParallelGroups.length > 0,
 			activeParallelGroup: Boolean(firstGroupCount && firstGroupCount > 0),
-			startedAt: now,
+			startedAt: typeof info.startedAt === "number" && Number.isFinite(info.startedAt) ? info.startedAt : now,
 			updatedAt: now,
 			timeoutMs: info.timeoutMs,
 			deadlineAt: info.deadlineAt,

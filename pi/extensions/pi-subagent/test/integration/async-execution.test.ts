@@ -1435,20 +1435,22 @@ describe("async execution utilities", { skip: !available ? "pi packages not avai
 			shareEnabled: false,
 			maxSubagentDepth: 2,
 		};
-		const startedEvent = (id: string): { task?: string; goal?: string } => {
+		const startedEvent = (id: string): { task?: string; goal?: string; startedAt?: number; sessionFiles?: Array<string | undefined> } => {
 			const event = emitted.find((entry) => entry.channel === SUBAGENT_ASYNC_STARTED_EVENT && (entry.data as { id?: string }).id === id);
 			assert.ok(event, `missing async-started event for ${id}`);
-			return event.data as { task?: string; goal?: string };
+			return event.data as { task?: string; goal?: string; startedAt?: number; sessionFiles?: Array<string | undefined> };
 		};
 		mockPi.onCall({ output: "single done" });
 		const singleId = `async-handoff-single-${Date.now().toString(36)}`;
 		const wrappedTask = `Fork preamble: ${"execution ".repeat(20)}`;
 		const rawGoal = `Caller-facing goal: ${"raw ".repeat(40)}`;
+		const singleSessionFile = path.join(tempDir, "async-started-single-session.jsonl");
 		const singleResult = executeAsyncSingle(singleId, {
 			agent: "worker",
 			task: wrappedTask,
 			goal: rawGoal,
 			agentConfig: makeAgent("worker"),
+			sessionFile: singleSessionFile,
 			...commonParams,
 		});
 		assert.match(singleResult.content[0]?.text ?? "", /Async: worker \[/);
@@ -1457,6 +1459,8 @@ describe("async execution utilities", { skip: !available ? "pi packages not avai
 		assert.match(singleResult.content[0]?.text ?? "", /non-interactive run: Pi auto-drains current-session background work at agent_end/);
 		assert.equal(startedEvent(singleId).task, wrappedTask.slice(0, 50));
 		assert.equal(startedEvent(singleId).goal, rawGoal.slice(0, 120));
+		assert.equal(typeof startedEvent(singleId).startedAt, "number");
+		assert.deepEqual(startedEvent(singleId).sessionFiles, [singleSessionFile]);
 		await waitForAsyncResultFile(singleId, 30_000);
 
 		mockPi.onCall({ output: "interactive done" });

@@ -6,6 +6,7 @@ interface BeginForegroundChildInput {
 	description?: string;
 	model?: string;
 	thinking?: string;
+	sessionFile?: string;
 	interrupt: () => boolean;
 	detach?: () => boolean;
 }
@@ -90,7 +91,10 @@ export function beginForegroundChild(control: ForegroundRunControl, input: Begin
 		updatedAt: now,
 		...(input.model ? { model: input.model } : {}),
 		...(input.thinking ? { thinking: input.thinking } : {}),
+		...(input.sessionFile ? { sessionFile: input.sessionFile } : {}),
 	};
+	control.childStartedAt ??= new Map();
+	control.childStartedAt.set(input.index, now);
 	child.interrupt = () => {
 		if (!input.interrupt()) return false;
 		child.currentActivityState = undefined;

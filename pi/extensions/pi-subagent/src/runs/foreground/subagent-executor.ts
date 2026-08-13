@@ -31,6 +31,7 @@ import {
 	buildChainInstructions,
 	writeInitialProgressFile,
 	getStepAgents,
+	isCheckpointStep,
 	isParallelStep,
 	isDynamicParallelStep,
 	resolveStepBehavior,
@@ -479,6 +480,7 @@ function foregroundChildActivityFromProgress(progress: SingleResult["progress"] 
 function rememberForegroundRun(state: SubagentState, input: { runId: string; mode: "single" | "parallel" | "chain"; cwd: string; sessionId: string | null; results: SingleResult[]; checkpoint?: Details["checkpoint"] }): void {
 	state.foregroundRuns ??= new Map();
 	const previous = state.foregroundRuns.get(input.runId);
+	const control = state.foregroundControls.get(input.runId);
 	const updatedAt = Date.now();
 	state.foregroundRuns.set(input.runId, {
 		runId: input.runId,
@@ -488,10 +490,12 @@ function rememberForegroundRun(state: SubagentState, input: { runId: string; mod
 		updatedAt,
 		...(input.checkpoint ? { checkpoint: input.checkpoint } : {}),
 		children: input.results.map((result, index) => {
+			const startedAt = control?.childStartedAt?.get(result.index) ?? previous?.children[index]?.startedAt;
 			const child = {
 				agent: result.agent,
 				index,
 				...(result.context ? { context: result.context } : {}),
+				...(startedAt !== undefined ? { startedAt } : {}),
 				status: resolveSubagentResultStatus(omitUndefinedProperties({
 					exitCode: result.exitCode,
 					interrupted: result.interrupted,
@@ -574,10 +578,12 @@ function updateRememberedForegroundChild(state: SubagentState, input: { runId: s
 		turnBudgetExceeded: input.result.turnBudgetExceeded,
 	}));
 	const child = run.children[input.index] ?? { agent: input.result.agent, index: input.index, status: "detached" as const };
+	const startedAt = state.foregroundControls.get(input.runId)?.childStartedAt?.get(input.index) ?? child.startedAt;
 	run.children[input.index] = omitUndefinedProperties({
 		...child,
 		agent: input.result.agent,
 		index: input.index,
+		...(startedAt !== undefined ? { startedAt } : {}),
 		...(input.result.context ? { context: input.result.context } : {}),
 		status: terminalStatus,
 		...foregroundChildActivityFromProgress(input.result.progress),
@@ -2063,6 +2069,7 @@ function collectChainSessionFiles(
 	const sessionFiles: (string | undefined)[] = [];
 	let flatIndex = 0;
 	for (const step of chain) {
+		if (isCheckpointStep(step)) continue;
 		if (isParallelStep(step)) {
 			for (const task of step.parallel) {
 				sessionFiles.push(sessionFileForTask(task.agent, flatIndex, task.model));
@@ -2093,6 +2100,7 @@ function collectChainThinkingOverrides(
 	const thinkingOverrides: (AgentConfig["thinking"] | undefined)[] = [];
 	let flatIndex = 0;
 	for (const step of chain) {
+		if (isCheckpointStep(step)) continue;
 		if (isParallelStep(step)) {
 			for (const task of step.parallel) {
 				thinkingOverrides.push(thinkingOverrideForTask(task.agent, flatIndex, task.model));
@@ -2172,6 +2180,7 @@ function collectStaticLaunchSummaries(input: {
 		const launches: StaticLaunchSummary[] = [];
 		let flatIndex = 0;
 		for (const step of input.params.chain) {
+			if (isCheckpointStep(step)) continue;
 			if (isParallelStep(step)) {
 				for (const task of step.parallel) {
 					launches.push(summary(task.agent, flatIndex, task.model));
@@ -2197,7 +2206,7 @@ function collectStaticLaunchSummaries(input: {
 }
 
 function firstChainAgent(chain: ChainStep[]): string | undefined {
-	const first = chain[0];
+	const first = chain.find((step) => !isCheckpointStep(step));
 	if (!first) return undefined;
 	if (isParallelStep(first)) return first.parallel[0]?.agent;
 	if (isDynamicParallelStep(first)) return first.parallel.agent;
@@ -2205,7 +2214,7 @@ function firstChainAgent(chain: ChainStep[]): string | undefined {
 }
 
 function firstRawChainTask(chain: ChainStep[]): string | undefined {
-	const first = chain[0];
+	const first = chain.find((step) => !isCheckpointStep(step));
 	if (!first) return undefined;
 	if (isParallelStep(first)) return first.parallel[0]?.task;
 	if (isDynamicParallelStep(first)) return first.parallel.task;
@@ -2222,6 +2231,7 @@ function resolveAsyncEventGoal(workflowTask: string | undefined, rawChain: Chain
 
 function wrapChainTasksForFork(chain: ChainStep[], contextPolicy: AgentDefaultContextPolicy): ChainStep[] {
 	return chain.map((step, stepIndex) => {
+		if (isCheckpointStep(step)) return step;
 		if (isParallelStep(step)) {
 			return compactOptional<ParallelStep>({
 				...step,
@@ -2274,6 +2284,7 @@ function preflightForkSessionsForStaticTasks(
 	if (!params.chain?.length) return;
 	let flatIndex = 0;
 	for (const step of params.chain) {
+		if (isCheckpointStep(step)) continue;
 		if (isParallelStep(step)) {
 			for (const task of step.parallel) {
 				if (shouldForkAgent(contextPolicy, task.agent)) sessionFileForTask(task.agent, flatIndex, task.model);
@@ -2956,6 +2967,7 @@ async function runForegroundParallelTasks(input: ForegroundParallelRunInput): Pr
 			agentConfig,
 		);
 		const interruptController = new AbortController();
+		const childSessionFile = input.sessionFileForTask(task.agent, index, input.modelOverrides[index]);
 		if (input.foregroundControl) {
 			const model = input.modelOverrides[index];
 			const thinking = resolveEffectiveThinking(model, input.thinkingOverrideForTask(task.agent, index, model));
@@ -2965,6 +2977,7 @@ async function runForegroundParallelTasks(input: ForegroundParallelRunInput): Pr
 				...(input.taskDescriptions[index] === undefined ? {} : { description: input.taskDescriptions[index] }),
 				...(model ? { model } : {}),
 				...(thinking ? { thinking } : {}),
+				...(childSessionFile ? { sessionFile: childSessionFile } : {}),
 				interrupt: () => {
 					if (interruptController.signal.aborted) return false;
 					interruptController.abort();
@@ -2988,7 +3001,7 @@ async function runForegroundParallelTasks(input: ForegroundParallelRunInput): Pr
 			runId: input.runId,
 			index,
 			sessionDir: input.sessionDirForIndex(index),
-			sessionFile: input.sessionFileForTask(task.agent, index, input.modelOverrides[index]),
+			sessionFile: childSessionFile,
 			share: input.shareEnabled,
 			artifactsDir: input.artifactConfig.enabled ? input.artifactsDir : undefined,
 			artifactConfig: input.artifactConfig,
@@ -3655,6 +3668,7 @@ async function runSinglePath(data: ExecutionContextData, deps: ExecutorDeps): Pr
 	const interruptController = new AbortController();
 	let detachForeground: ((reason?: string) => boolean) | undefined;
 	const foregroundControl = deps.state.foregroundControls.get(runId);
+	const childSessionFile = sessionFileForTask(params.agent!, 0, modelOverride);
 	if (foregroundControl) {
 		const thinking = resolveEffectiveThinking(modelOverride, thinkingOverrideForTask(params.agent!, 0, modelOverride));
 		beginForegroundChild(foregroundControl, omitUndefinedProperties({
@@ -3663,6 +3677,7 @@ async function runSinglePath(data: ExecutionContextData, deps: ExecutorDeps): Pr
 			description: foregroundControl.description,
 			...(modelOverride ? { model: modelOverride } : {}),
 			...(thinking ? { thinking } : {}),
+			...(childSessionFile ? { sessionFile: childSessionFile } : {}),
 			interrupt: () => {
 				if (interruptController.signal.aborted) return false;
 				interruptController.abort();
@@ -3693,7 +3708,7 @@ async function runSinglePath(data: ExecutionContextData, deps: ExecutorDeps): Pr
 			intercomEvents: deps.pi.events,
 			runId,
 			sessionDir: sessionDirForIndex(0),
-			sessionFile: sessionFileForTask(params.agent!, 0, modelOverride),
+			sessionFile: childSessionFile,
 			share: shareEnabled,
 			artifactsDir: artifactConfig.enabled ? artifactsDir : undefined,
 			artifactConfig,
@@ -4977,6 +4992,7 @@ export function createSubagentExecutor(deps: ExecutorDeps): {
 				description: foregroundDescription,
 				currentActivityState: undefined,
 				activeChildren: new Map(),
+				childStartedAt: new Map(),
 				// The outer executor owns scheduling until its finally block settles.
 				schedulingOwners: 1,
 				nestedRoute,

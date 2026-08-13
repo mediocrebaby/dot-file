@@ -268,6 +268,72 @@ describe("native subagent fleet", () => {
 		}
 	});
 
+	it("focuses agents by default and routes navigation through the active pane", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-pane-focus-"));
+		try {
+			const agents = Array.from({ length: 12 }, (_, index) => `agent-${index}`);
+			writeAsyncRun(root, { id: "async-focus", agents });
+			const styleCalls: Array<{ name: string; text: string }> = [];
+			const focusTheme = {
+				fg(name: string, text: string) {
+					styleCalls.push({ name, text });
+					return text;
+				},
+				bold(text: string) { return text; },
+			};
+			const component = new SubagentFleetComponent(
+				{ terminal: { rows: 14, columns: 100 }, requestRender() {} } as never,
+				focusTheme as never,
+				stateForTest(),
+				() => {},
+				{ asyncDirRoot: root, resultsDir: path.join(root, "results"), refreshMs: 60_000 },
+			);
+			const selectedAgent = () => component.render(100).find((line) => line.includes("›")) ?? "";
+			try {
+				let lines = component.render(100);
+				assert.ok(styleCalls.some((call) => call.name === "accent" && call.text.includes("Agents")));
+				assert.ok(styleCalls.some((call) => call.name === "border" && call.text.includes("Detail")));
+				assert.ok(lines.some((line) => line.includes("x/Ctrl+O tools") && line.includes("Esc") && line.includes("1/12")));
+				assert.ok(!lines.some((line) => line.includes("PgUp") || line.includes("Home/End")));
+				assert.match(selectedAgent(), /agent-0\b/);
+
+				component.handleInput("\x1b[B");
+				assert.match(selectedAgent(), /agent-1\b/);
+				component.handleInput("j");
+				assert.match(selectedAgent(), /agent-2\b/);
+				component.handleInput("\x1b[A");
+				component.handleInput("k");
+				assert.match(selectedAgent(), /agent-0\b/);
+				component.handleInput("\x1b[6~");
+				assert.match(selectedAgent(), /agent-5\b/);
+				component.handleInput("\x1b[5~");
+				assert.match(selectedAgent(), /agent-0\b/);
+				component.handleInput("\x1b[F");
+				assert.match(selectedAgent(), /agent-11\b/);
+				component.handleInput("\x1b[H");
+				assert.match(selectedAgent(), /agent-0\b/);
+
+				styleCalls.length = 0;
+				component.handleInput("\x1b[C");
+				lines = component.render(100);
+				assert.ok(styleCalls.some((call) => call.name === "border" && call.text.includes("Agents")));
+				assert.ok(styleCalls.some((call) => call.name === "accent" && call.text.includes("Detail")));
+				assert.ok(lines.some((line) => line.includes("o/x/Ctrl+O tools") && line.includes("Esc") && line.includes("1/12")));
+				assert.ok(!lines.some((line) => line.includes("PgUp") || line.includes("Home/End")));
+				component.handleInput("\x1b[B");
+				component.handleInput("j");
+				assert.match(selectedAgent(), /agent-0\b/, "detail navigation must not change the selected agent");
+				component.handleInput("\x1b[D");
+				component.handleInput("\x1b[6~");
+				assert.match(selectedAgent(), /agent-5\b/);
+			} finally {
+				component.dispose();
+			}
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
 	it("renders structured tool activity and assistant Markdown when a child transcript is available", () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-structured-"));
 		try {
@@ -299,30 +365,81 @@ describe("native subagent fleet", () => {
 				assert.ok(lines.some((line) => line.includes("const fleet = true;")));
 				assert.ok(!lines.some((line) => line.includes("very large tool payload")));
 				assert.ok(!lines.some((line) => line.includes("RAW FALLBACK SHOULD NOT RENDER")));
-				const bottomLines = lines;
-				const realDateNow = Date.now;
-				const laterNow = realDateNow() + 2_000;
-				Date.now = () => laterNow;
-				try {
-					component.handleInput("K");
-					lines = component.render(100);
-					assert.notDeepEqual(lines, bottomLines, "Shift+K should scroll the conversation up by one line");
-					component.handleInput("J");
-					lines = component.render(100);
-					assert.deepEqual(lines, bottomLines, "Shift+J should scroll the conversation back down by one line");
-				} finally {
-					Date.now = realDateNow;
-				}
+				component.handleInput("\x1b[C");
+				const bottomLines = component.render(100);
+				component.handleInput("k");
+				lines = component.render(100);
+				assert.notDeepEqual(lines, bottomLines, "k should scroll the focused detail pane up by one line");
+				component.handleInput("j");
+				lines = component.render(100);
+				assert.deepEqual(lines, bottomLines, "j should scroll the focused detail pane back down by one line");
+				component.handleInput("\x1b[A");
+				assert.notDeepEqual(component.render(100), bottomLines, "Up should scroll the focused detail pane up by one line");
+				component.handleInput("\x1b[B");
+				assert.deepEqual(component.render(100), bottomLines, "Down should scroll the focused detail pane back down by one line");
+				component.handleInput("K");
+				component.handleInput("J");
+				assert.deepEqual(component.render(100), bottomLines, "Shift+J/K should no longer scroll detail");
+				component.handleInput("\x1b[H");
+				assert.notDeepEqual(component.render(100), bottomLines, "Home should scroll detail to the top");
+				assert.ok(component.render(100).some((line) => line.includes("injected task")), "the actual initial model input should be visible");
+				component.handleInput("\x1b[F");
+				assert.deepEqual(component.render(100), bottomLines, "End should scroll detail to the bottom");
 				for (let page = 0; page < 4; page++) component.handleInput("\x1b[5~");
 				lines = component.render(100);
 				assert.ok(lines.some((line) => line.includes("Conversation") && line.includes("assistant response")), "the conversation header should remain pinned while scrolling");
 				assert.ok(lines.some((line) => line.includes("✓ read") && line.includes("src/tui/fleet.ts")), "page up should reveal compact tool activity");
 				assert.ok(lines.some((line) => line.includes("Assistant") && line.includes("test-model")), "page up should reveal the rendered assistant message header");
+				for (let page = 0; page < 4; page++) component.handleInput("\x1b[6~");
+				assert.deepEqual(component.render(100), bottomLines, "PageDown should return detail to the bottom boundary");
 				for (const renderWidth of [60, 80, 100]) {
 					for (const line of component.render(renderWidth)) {
 						assert.ok(visibleWidth(line) <= renderWidth, `line exceeded ${renderWidth} columns: ${line}`);
 					}
 				}
+			} finally {
+				component.dispose();
+			}
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("falls back to the native child session when traceless mode disables debug transcripts", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-session-fallback-"));
+		try {
+			const asyncDir = writeAsyncRun(root, { id: "async-session", state: "complete", output: "FINAL OUTPUT ONLY" });
+			const sessionRoot = path.join(root, "child-sessions");
+			const sessionFile = path.join(sessionRoot, "async-session", "run-0", "session.jsonl");
+			fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+			fs.writeFileSync(sessionFile, [
+				JSON.stringify({ type: "session", version: 3, timestamp: "2026-08-13T00:00:00.000Z" }),
+				JSON.stringify({ type: "message", timestamp: "2026-08-13T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "Actual model input" }] } }),
+				JSON.stringify({ type: "message", timestamp: "2026-08-13T00:00:02.000Z", message: { role: "assistant", model: "session-model", content: [{ type: "text", text: "Actual model output" }] } }),
+			].join("\n") + "\n", "utf-8");
+			const statusPath = path.join(asyncDir, "status.json");
+			const status = JSON.parse(fs.readFileSync(statusPath, "utf-8")) as { steps: Array<{ sessionFile?: string; transcriptPath?: string }> };
+			status.steps[0]!.sessionFile = sessionFile;
+			delete status.steps[0]!.transcriptPath;
+			fs.writeFileSync(statusPath, JSON.stringify(status, null, 2), "utf-8");
+
+			const state = stateForTest();
+			state.artifactDirPreference = "temp";
+			state.subagentSessionRoot = sessionRoot;
+			const component = new SubagentFleetComponent(
+				{ terminal: { rows: 32, columns: 100 }, requestRender() {} } as never,
+				theme as never,
+				state,
+				() => {},
+				{ asyncDirRoot: root, resultsDir: path.join(root, "results"), refreshMs: 60_000, markdownTheme },
+			);
+			try {
+				const lines = component.render(100);
+				assert.ok(lines.some((line) => line.includes("Input")));
+				assert.ok(lines.some((line) => line.includes("Actual model input")));
+				assert.ok(lines.some((line) => line.includes("Assistant") && line.includes("session-model")));
+				assert.ok(lines.some((line) => line.includes("Actual model output")));
+				assert.ok(!lines.some((line) => line.includes("FINAL OUTPUT ONLY")), "session interaction should replace final-output fallback");
 			} finally {
 				component.dispose();
 			}
@@ -372,7 +489,7 @@ describe("native subagent fleet", () => {
 		}
 	});
 
-	it("toggles bounded tool output expansion with x and Ctrl+O", () => {
+	it("toggles bounded tool output expansion with right-pane o and global compatibility keys", () => {
 		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-tool-toggle-"));
 		try {
 			writeAsyncRun(root, {
@@ -396,14 +513,23 @@ describe("native subagent fleet", () => {
 			);
 			try {
 				let lines = component.render(100);
-				assert.ok(lines.some((line) => line.includes("alpha beta gamma") && line.includes("x to expand")));
-				component.handleInput("x");
+				assert.ok(lines.some((line) => line.includes("alpha beta gamma") && line.includes("o/x to expand")));
+				component.handleInput("o");
+				assert.deepEqual(component.render(100), lines, "o should not toggle tools while the agents pane is focused");
+				component.handleInput("\x1b[C");
+				component.handleInput("o");
 				lines = component.render(100);
 				assert.ok(lines.some((line) => line.includes("alpha") && !line.includes("beta")));
-				assert.ok(lines.some((line) => line.includes("x to collapse")));
+				assert.ok(lines.some((line) => line.includes("o/x to collapse")));
+				component.handleInput("o");
+				lines = component.render(100);
+				assert.ok(lines.some((line) => line.includes("alpha beta gamma") && line.includes("o/x to expand")));
+				component.handleInput("\x1b[D");
+				component.handleInput("x");
+				assert.ok(component.render(100).some((line) => line.includes("o/x to collapse")), "x should remain global");
 				component.handleInput("\x0f");
 				lines = component.render(100);
-				assert.ok(lines.some((line) => line.includes("alpha beta gamma") && line.includes("x to expand")));
+				assert.ok(lines.some((line) => line.includes("alpha beta gamma") && line.includes("o/x to expand")));
 				fs.appendFileSync(
 					path.join(root, "async-tools", "transcript-0.jsonl"),
 					`${JSON.stringify({ recordType: "message", role: "assistant", text: "Cache refreshed after append", ts: 4 })}\n`,
@@ -411,7 +537,7 @@ describe("native subagent fleet", () => {
 				);
 				lines = component.render(100);
 				assert.ok(lines.some((line) => line.includes("Cache refreshed after append")));
-				assert.equal(renderRequests, 2);
+				assert.equal(renderRequests, 6);
 			} finally {
 				component.dispose();
 			}
@@ -463,6 +589,200 @@ describe("native subagent fleet", () => {
 				assert.ok(lines.some((line) => line.includes("Worker live result")));
 			} finally {
 				component.dispose();
+			}
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("trusts exact runtime-owned session files outside derived roots and bounds fork history", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-owned-sessions-"));
+		try {
+			const startedAt = Date.now();
+			const foregroundSession = path.join(root, "explicit-foreground-session", "fork.jsonl");
+			const asyncSession = path.join(root, "explicit-async-session", "session.jsonl");
+			const writeNativeSession = (filePath: string, currentOutput: string) => {
+				fs.mkdirSync(path.dirname(filePath), { recursive: true });
+				fs.writeFileSync(filePath, [
+					JSON.stringify({ type: "session", version: 3, id: "session-header", timestamp: new Date(startedAt - 10_000).toISOString() }),
+					JSON.stringify({ type: "message", id: "history-user", parentId: null, timestamp: new Date(startedAt - 5_000).toISOString(), message: { role: "user", content: [{ type: "text", text: "Inherited history must stay hidden" }] } }),
+					JSON.stringify({ type: "message", id: "history-output", parentId: "history-user", timestamp: new Date(startedAt - 4_000).toISOString(), message: { role: "assistant", content: [{ type: "text", text: "Old parent output" }] } }),
+					JSON.stringify({ type: "message", id: "current-user", parentId: "history-output", timestamp: new Date(startedAt + 10).toISOString(), message: { role: "user", content: [{ type: "text", text: "Current runtime input" }] } }),
+					JSON.stringify({ type: "message", id: "current-output", parentId: "current-user", timestamp: new Date(startedAt + 20).toISOString(), message: { role: "assistant", content: [{ type: "text", text: currentOutput }] } }),
+				].join("\n") + "\n", "utf-8");
+			};
+			writeNativeSession(foregroundSession, "Foreground runtime output");
+			writeNativeSession(asyncSession, "Async runtime output");
+
+			const state = stateForTest();
+			state.parentSessionFile = null;
+			state.subagentSessionRoot = undefined;
+			state.artifactDirPreference = "temp";
+			state.foregroundControls.set("foreground-owned", {
+				runId: "foreground-owned",
+				mode: "single",
+				startedAt,
+				updatedAt: startedAt + 20,
+				cwd: path.join(root, "cwd"),
+				currentAgent: "worker",
+				currentIndex: 0,
+				activeChildren: new Map([[0, {
+					index: 0,
+					agent: "worker",
+					startedAt,
+					updatedAt: startedAt + 20,
+					sessionFile: foregroundSession,
+				}]]),
+			});
+			state.asyncJobs.set("async-owned", {
+				asyncId: "async-owned",
+				asyncDir: path.join(root, "async-run"),
+				cwd: path.join(root, "cwd"),
+				sessionId: "session-current",
+				status: "running",
+				mode: "single",
+				startedAt,
+				updatedAt: startedAt + 20,
+				sessionFiles: [asyncSession],
+				steps: [{ agent: "reviewer", index: 0, status: "running", startedAt, sessionFile: asyncSession }],
+			});
+
+			for (const [initialKey, expected] of [
+				["foreground-active:foreground-owned:0", "Foreground runtime output"],
+				["async:async-owned:0", "Async runtime output"],
+			] as const) {
+				const component = new SubagentFleetComponent(
+					{ terminal: { rows: 28, columns: 100 }, requestRender() {} } as never,
+					theme as never,
+					state,
+					() => {},
+					{ initialKey, refreshMs: 60_000, markdownTheme },
+				);
+				try {
+					const lines = component.render(100);
+					assert.ok(lines.some((line) => line.includes("Current runtime input")));
+					assert.ok(lines.some((line) => line.includes(expected)));
+					assert.ok(!lines.some((line) => line.includes("Inherited history") || line.includes("Old parent output")));
+				} finally {
+					component.dispose();
+				}
+			}
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("authenticates materialized dynamic session paths by membership instead of planned index", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-dynamic-session-membership-"));
+		try {
+			const startedAt = Date.now();
+			const unusedPlannedSession = path.join(root, "sessions", "unused-planned.jsonl");
+			const materializedSession = path.join(root, "sessions", "materialized.jsonl");
+			const unownedSiblingSession = path.join(root, "sessions", "unowned-sibling.jsonl");
+			for (const [filePath, output] of [
+				[unusedPlannedSession, "Wrong planned child output"],
+				[materializedSession, "Correct materialized child output"],
+				[unownedSiblingSession, "Unowned sibling output"],
+			] as const) {
+				fs.mkdirSync(path.dirname(filePath), { recursive: true });
+				fs.writeFileSync(filePath, [
+					JSON.stringify({ type: "message", id: `${output}-user`, parentId: null, timestamp: new Date(startedAt + 10).toISOString(), message: { role: "user", content: [{ type: "text", text: "Dynamic child input" }] } }),
+					JSON.stringify({ type: "message", id: `${output}-assistant`, parentId: `${output}-user`, timestamp: new Date(startedAt + 20).toISOString(), message: { role: "assistant", content: [{ type: "text", text: output }] } }),
+				].join("\n") + "\n", "utf-8");
+			}
+
+			const state = stateForTest();
+			state.artifactDirPreference = "temp";
+			state.asyncJobs.set("async-dynamic", {
+				asyncId: "async-dynamic",
+				asyncDir: path.join(root, "async-run"),
+				cwd: path.join(root, "cwd"),
+				sessionId: "session-current",
+				status: "running",
+				mode: "chain",
+				startedAt,
+				updatedAt: startedAt + 20,
+				// Planned slots can shift after dynamic fanout materializes fewer maxItems.
+				sessionFiles: [unusedPlannedSession, materializedSession],
+				steps: [{
+					agent: "reviewer",
+					index: 0,
+					status: "running",
+					startedAt,
+					sessionFile: materializedSession,
+				}, {
+					agent: "writer",
+					index: 1,
+					status: "pending",
+					sessionFile: unownedSiblingSession,
+				}],
+			});
+			const component = new SubagentFleetComponent(
+				{ terminal: { rows: 28, columns: 100 }, requestRender() {} } as never,
+				theme as never,
+				state,
+				() => {},
+				{ initialKey: "async:async-dynamic:0", refreshMs: 60_000, markdownTheme },
+			);
+			try {
+				const lines = component.render(100);
+				assert.ok(lines.some((line) => line.includes("Correct materialized child output")));
+				assert.ok(!lines.some((line) => line.includes("Wrong planned child output")));
+			} finally {
+				component.dispose();
+			}
+			const unownedComponent = new SubagentFleetComponent(
+				{ terminal: { rows: 28, columns: 100 }, requestRender() {} } as never,
+				theme as never,
+				state,
+				() => {},
+				{ initialKey: "async:async-dynamic:1", refreshMs: 60_000, markdownTheme },
+			);
+			try {
+				assert.ok(!unownedComponent.render(100).some((line) => line.includes("Unowned sibling output")), "a reported sibling path outside the parent-owned set must be rejected");
+			} finally {
+				unownedComponent.dispose();
+			}
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("preserves sparse parent-owned indexes for top-level parallel fallback", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-sparse-owned-sessions-"));
+		try {
+			const secondSession = path.join(root, "sessions", "second.jsonl");
+			fs.mkdirSync(path.dirname(secondSession), { recursive: true });
+			fs.writeFileSync(secondSession, `${JSON.stringify({ type: "message", timestamp: new Date().toISOString(), message: { role: "assistant", content: [{ type: "text", text: "Second child only" }] } })}\n`, "utf-8");
+			const state = stateForTest();
+			state.artifactDirPreference = "temp";
+			state.asyncJobs.set("async-sparse", {
+				asyncId: "async-sparse",
+				asyncDir: path.join(root, "async-run"),
+				sessionId: "session-current",
+				status: "running",
+				mode: "parallel",
+				startedAt: Date.now() - 100,
+				updatedAt: Date.now(),
+				sessionFiles: [undefined, secondSession],
+				steps: [
+					{ agent: "first", index: 0, status: "running" },
+					{ agent: "second", index: 1, status: "running" },
+				],
+			});
+			for (const [initialKey, visible] of [["async:async-sparse:0", false], ["async:async-sparse:1", true]] as const) {
+				const component = new SubagentFleetComponent(
+					{ terminal: { rows: 28, columns: 100 }, requestRender() {} } as never,
+					theme as never,
+					state,
+					() => {},
+					{ initialKey, refreshMs: 60_000, markdownTheme },
+				);
+				try {
+					assert.equal(component.render(100).some((line) => line.includes("Second child only")), visible);
+				} finally {
+					component.dispose();
+				}
 			}
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });

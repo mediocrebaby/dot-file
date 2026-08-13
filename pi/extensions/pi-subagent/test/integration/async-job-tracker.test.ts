@@ -135,6 +135,31 @@ describe("async job tracker", { skip: !available ? "pi packages not available" :
 		}
 	});
 
+	it("retains exact parent-owned session files and the pre-spawn launch boundary", () => {
+		const asyncRoot = createTempDir("pi-async-job-owned-session-");
+		try {
+			const state = createState();
+			const recorder = createEventRecorder();
+			const tracker = trackerMod!.createAsyncJobTracker(recorder.pi, state as never, asyncRoot);
+			const launchStartedAt = Date.now() - 100;
+			const ownedSession = path.join(asyncRoot, "owned", "child.jsonl");
+			tracker.handleStarted({
+				id: "run-owned-session",
+				asyncDir: path.join(asyncRoot, "run-owned-session"),
+				agent: "worker",
+				startedAt: launchStartedAt,
+				sessionFiles: [ownedSession, undefined],
+			});
+
+			const job = state.asyncJobs.get("run-owned-session") as { startedAt?: number; sessionFiles?: Array<string | undefined> } | undefined;
+			assert.equal(job?.startedAt, launchStartedAt);
+			assert.deepEqual(job?.sessionFiles, [path.resolve(ownedSession), undefined]);
+			tracker.resetJobs();
+		} finally {
+			removeTempDir(asyncRoot);
+		}
+	});
+
 	it("removes completed jobs after retention and requests a rerender", async () => {
 		const asyncRoot = createTempDir("pi-async-job-tracker-");
 		try {

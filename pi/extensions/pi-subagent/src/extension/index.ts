@@ -235,6 +235,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		baseCwd: "",
 		currentSessionId: null,
 		artifactDirPreference: config.projectTracelessMode === true ? "temp" : config.artifactDir ?? DEFAULT_ARTIFACT_CONFIG.dir,
+		...(config.defaultSessionDir ? { subagentSessionRoot: path.resolve(expandTilde(config.defaultSessionDir)) } : {}),
 		...(config.authorityPolicy ? { authorityPolicy: config.authorityPolicy } : {}),
 		...(config.missions ? { missionStoreConfig: config.missions } : {}),
 		parentSessionFile: null,
@@ -588,6 +589,11 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		state.baseCwd = ctx.cwd;
 		state.currentSessionId = resolveCurrentSessionId(ctx.sessionManager);
 		state.parentSessionFile = ctx.sessionManager.getSessionFile();
+		state.subagentSessionRoot = config.defaultSessionDir
+			? path.resolve(expandTilde(config.defaultSessionDir))
+			: state.parentSessionFile
+				? getSubagentSessionRoot(state.parentSessionFile)
+				: undefined;
 		state.subagentSpawns = {
 			sessionId: state.currentSessionId,
 			count: 0,
@@ -653,6 +659,7 @@ export default function registerSubagentExtension(pi: ExtensionAPI): void {
 		stopResultWatcher();
 		state.currentSessionId = null;
 		state.parentSessionFile = null;
+		state.subagentSessionRoot = undefined;
 		completionNotifier.dispose();
 		delete process.env[SUBAGENT_PARENT_SESSION_ENV];
 		for (const unsubscribe of eventUnsubscribes) {

@@ -52,8 +52,9 @@ describe("Fleet inspector structured transcript", () => {
 			]);
 
 			const transcript = readFleetTranscript(transcriptPath, { trustedRoots: [root] });
-			assert.deepEqual(transcript.events.map((event) => event.kind), ["tool", "assistant", "tool", "user"]);
-			assert.deepEqual(transcript.events[0], {
+			assert.deepEqual(transcript.events.map((event) => event.kind), ["user", "tool", "assistant", "tool", "user"]);
+			assert.deepEqual(transcript.events[0], { kind: "user", text: "large injected task", input: true, timestamp: 1 });
+			assert.deepEqual(transcript.events[1], {
 				kind: "tool",
 				name: "read",
 				args: "src/tui/fleet.ts",
@@ -65,13 +66,15 @@ describe("Fleet inspector structured transcript", () => {
 				endedAt: 4,
 				timestamp: 3,
 			});
-			assert.equal(transcript.events[2]?.kind, "tool");
-			if (transcript.events[2]?.kind === "tool") {
-				assert.equal(transcript.events[2].status, "error");
-				assert.equal(transcript.events[2].error, "Permission denied");
+			assert.equal(transcript.events[3]?.kind, "tool");
+			if (transcript.events[3]?.kind === "tool") {
+				assert.equal(transcript.events[3].status, "error");
+				assert.equal(transcript.events[3].error, "Permission denied");
 			}
 
 			const rendered = renderFleetTranscript(transcript, 48, theme as never, markdownTheme);
+			assert.ok(rendered.some((line) => line.includes("Input")));
+			assert.ok(rendered.some((line) => line.includes("large injected task")));
 			assert.ok(rendered.some((line) => line.includes("✓ read") && line.includes("src/tui/fleet.ts")));
 			assert.ok(rendered.some((line) => line.includes("Assistant") && line.includes("test-model")));
 			assert.ok(rendered.some((line) => line.includes("Result")));
@@ -79,7 +82,76 @@ describe("Fleet inspector structured transcript", () => {
 			assert.ok(rendered.some((line) => line.includes("✗ write")));
 			assert.ok(rendered.some((line) => line.includes("Permission denied")));
 			assert.ok(rendered.some((line) => line.includes("Supervisor")));
-			assert.ok(!rendered.some((line) => line.includes("large injected task")));
+			assert.ok(!rendered.some((line) => line.includes("Task: large injected task")));
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("projects native Pi session input, tool calls, tool results, and assistant output", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-native-session-"));
+		try {
+			const transcriptPath = writeTranscript(root, [
+				{ type: "session", version: 3, timestamp: "2026-08-13T00:00:00.000Z" },
+				{ type: "message", timestamp: "2026-08-13T00:00:01.000Z", message: { role: "user", content: [{ type: "text", text: "Inspect the real exchange." }] } },
+				{ type: "message", timestamp: "2026-08-13T00:00:02.000Z", message: { role: "assistant", model: "native-model", content: [{ type: "thinking", thinking: "hidden reasoning" }, { type: "toolCall", id: "read-1", name: "read", arguments: { path: "src/a.ts" } }] } },
+				{ type: "message", timestamp: "2026-08-13T00:00:03.000Z", message: { role: "toolResult", toolCallId: "read-1", toolName: "read", isError: false, content: [{ type: "text", text: "export const value = 1;" }] } },
+				{ type: "message", timestamp: "2026-08-13T00:00:04.000Z", message: { role: "assistant", model: "native-model", content: [{ type: "text", text: "The value is exported." }] } },
+			]);
+
+			const transcript = readFleetTranscript(transcriptPath, { trustedRoots: [root] });
+			assert.deepEqual(transcript.events.map((event) => event.kind), ["user", "tool", "assistant"]);
+			assert.deepEqual(transcript.events[0], {
+				kind: "user",
+				text: "Inspect the real exchange.",
+				input: true,
+				timestamp: Date.parse("2026-08-13T00:00:01.000Z"),
+			});
+			const tool = transcript.events[1];
+			assert.equal(tool?.kind, "tool");
+			if (tool?.kind === "tool") {
+				assert.equal(tool.name, "read");
+				assert.equal(tool.status, "complete");
+				assert.equal(tool.output, "export const value = 1;");
+				assert.equal(tool.argsPayload, JSON.stringify({ path: "src/a.ts" }, null, 2));
+			}
+			assert.ok(transcript.events.some((event) => event.kind === "assistant" && event.text === "The value is exported." && event.model === "native-model"));
+
+			const rendered = renderFleetTranscript(transcript, 60, theme as never, markdownTheme);
+			assert.ok(rendered.some((line) => line.includes("Input")));
+			assert.ok(rendered.some((line) => line.includes("Inspect the real exchange.")));
+			assert.ok(rendered.some((line) => line.includes("✓ read")));
+			assert.ok(rendered.some((line) => line.includes("The value is exported.")));
+			assert.ok(!rendered.some((line) => line.includes("hidden reasoning")));
+		} finally {
+			fs.rmSync(root, { recursive: true, force: true });
+		}
+	});
+
+	it("keeps only the active native-session branch and current launch boundary", () => {
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-fleet-native-branch-"));
+		try {
+			const transcriptPath = writeTranscript(root, [
+				{ type: "session", version: 3, id: "session-id", timestamp: 1 },
+				{ type: "message", id: "old-user", parentId: null, timestamp: 10, message: { role: "user", content: [{ type: "text", text: "Inherited parent input" }] } },
+				{ type: "message", id: "old-assistant", parentId: "old-user", timestamp: 20, message: { role: "assistant", content: [{ type: "text", text: "Inherited parent output" }] } },
+				{ type: "message", id: "abandoned-user", parentId: "old-assistant", timestamp: 310, message: { role: "user", content: [{ type: "text", text: "Abandoned branch input" }] } },
+				{ type: "message", id: "abandoned-assistant", parentId: "abandoned-user", timestamp: 320, message: { role: "assistant", content: [{ type: "text", text: "Abandoned branch output" }] } },
+				{ type: "message", id: "current-user", parentId: "old-assistant", timestamp: 330, message: { role: "user", content: [{ type: "text", text: "Current child input" }] } },
+				{ type: "message", id: "current-tool", parentId: "current-user", timestamp: 340, message: { role: "assistant", content: [{ type: "toolCall", id: "tool-1", name: "read", arguments: { path: "src/current.ts" } }] } },
+				{ type: "message", id: "current-result", parentId: "current-tool", timestamp: 350, message: { role: "toolResult", toolCallId: "tool-1", toolName: "read", content: [{ type: "text", text: "current tool output" }] } },
+				{ type: "message", id: "repeat-1", parentId: "current-result", timestamp: 360, message: { role: "assistant", content: [{ type: "text", text: "Repeated output" }] } },
+				{ type: "message", id: "repeat-2", parentId: "repeat-1", timestamp: 370, message: { role: "assistant", content: [{ type: "text", text: "Repeated output" }] } },
+			]);
+
+			const transcript = readFleetTranscript(transcriptPath, { trustedRoots: [root], startedAt: 300 });
+			assert.deepEqual(transcript.events.map((event) => event.kind), ["user", "tool", "assistant", "assistant"]);
+			assert.deepEqual(transcript.events[0], { kind: "user", text: "Current child input", input: true, timestamp: 330 });
+			assert.equal(transcript.events.filter((event) => event.kind === "assistant" && event.text === "Repeated output").length, 2);
+			const tool = transcript.events.find((event) => event.kind === "tool");
+			assert.equal(tool?.kind === "tool" ? tool.output : undefined, "current tool output");
+			assert.ok(!transcript.events.some((event) => "text" in event && event.text.includes("Inherited")));
+			assert.ok(!transcript.events.some((event) => "text" in event && event.text.includes("Abandoned")));
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
@@ -99,16 +171,16 @@ describe("Fleet inspector structured transcript", () => {
 			const transcript = readFleetTranscript(transcriptPath, { trustedRoots: [root] });
 			const compact = renderFleetTranscript(transcript, 52, theme as never, markdownTheme);
 			assert.ok(compact.some((line) => line.includes("line 8")));
-			assert.ok(compact.some((line) => line.includes("earlier lines") && line.includes("x to expand")));
+			assert.ok(compact.some((line) => line.includes("earlier lines") && line.includes("o/x to expand")));
 			assert.ok(compact.some((line) => line.includes("Took") && line.includes("1.2s")));
-			assert.ok(compact.some((line) => line.includes("const answer: number = 42;") && line.includes("x to expand")));
+			assert.ok(compact.some((line) => line.includes("const answer: number = 42;") && line.includes("o/x to expand")));
 
 			const expanded = renderFleetTranscript(transcript, 52, theme as never, markdownTheme, { expandedTools: true });
 			assert.ok(expanded.some((line) => line.includes("$ npm test")));
 			assert.ok(expanded.some((line) => line.includes("line 1")));
 			assert.ok(expanded.some((line) => line.includes("read src/a.ts")));
 			assert.ok(expanded.some((line) => line.includes("const answer: number = 42;")));
-			assert.ok(expanded.some((line) => line.includes("x to collapse")));
+			assert.ok(expanded.some((line) => line.includes("o/x to collapse")));
 		} finally {
 			fs.rmSync(root, { recursive: true, force: true });
 		}
