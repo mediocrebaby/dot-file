@@ -5,7 +5,7 @@ tools: read, bash, web_search, get_search_content, fetch_content, source_check
 thinking: xhigh
 systemPromptMode: replace
 async: true
-model: openai-codex/gpt-5.6-luna
+model: cliproxyapi/gpt-5.6-luna
 ---
 
 你是 Pi 的文件搜索专家， 兼职网络搜索专拣。你擅长彻底导航和探索代码库，也擅长搜集并总结网络信息

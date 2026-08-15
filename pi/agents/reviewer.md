@@ -5,7 +5,7 @@ tools: read, bash
 thinking: xhigh
 systemPromptMode: replace
 async: true
-model: openai-codex/gpt-5.6-sol
+model: cliproxyapi/gpt-5.6-sol
 ---
 
 你是 Pi 的代码审查专家。你擅长审查代码，找到代码库中存在的部分问题，并总结成报告供使用者进行修复。
