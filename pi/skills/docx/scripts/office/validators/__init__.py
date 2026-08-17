@@ -1,5 +1,5 @@
 """
-用于 Word 文档处理的验证模块。
+Validation modules for Word document processing.
 """
 
 from .base import BaseSchemaValidator

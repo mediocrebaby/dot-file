@@ -1,5 +1,14 @@
 """
-用于验证 Word 文档中修订追踪的验证器。
+Validator for tracked changes in Word documents.
+
+Detects untracked edits in word/document.xml: text that differs from the
+original without a <w:ins>/<w:del> wrapper recording it. The tracked changes
+that are new relative to the original are undone, and the result is compared
+against the original; whatever text still differs was edited without being
+tracked.
+
+Only the document body is compared. Headers, footers, footnotes and endnotes
+are separate parts and are not checked.
 """
 
 import subprocess
@@ -7,9 +16,13 @@ import tempfile
 import zipfile
 from pathlib import Path
 
+import defusedxml.ElementTree as ET
+from defusedxml.common import DefusedXmlException
+
+from helpers import rendered_text, safe_extract
+
 
 class RedliningValidator:
-    """用于验证 Word 文档中修订追踪的验证器。"""
 
     def __init__(self, unpacked_dir, original_docx, verbose=False):
         self.unpacked_dir = Path(unpacked_dir)
@@ -19,88 +32,48 @@ class RedliningValidator:
             "w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
         }
 
+    def repair(self) -> int:
+        return 0
+
     def validate(self):
-        """主验证方法，有效返回 True，否则返回 False。"""
-        # 验证解压目录是否存在且结构正确
         modified_file = self.unpacked_dir / "word" / "document.xml"
         if not modified_file.exists():
-            print(f"失败 - 未找到修改后的 document.xml: {modified_file}")
+            print(f"FAILED - Modified document.xml not found at {modified_file}")
             return False
 
-        # 首先，检查是否有需要验证的 Claude 修订
-        try:
-            import xml.etree.ElementTree as ET
-
-            tree = ET.parse(modified_file)
-            root = tree.getroot()
-
-            # 检查 Claude 作者的 w:del 或 w:ins 标签
-            del_elements = root.findall(".//w:del", self.namespaces)
-            ins_elements = root.findall(".//w:ins", self.namespaces)
-
-            # 仅过滤包含 Claude 的修改
-            claude_del_elements = [
-                elem
-                for elem in del_elements
-                if elem.get(f"{{{self.namespaces['w']}}}author") == "Claude"
-            ]
-            claude_ins_elements = [
-                elem
-                for elem in ins_elements
-                if elem.get(f"{{{self.namespaces['w']}}}author") == "Claude"
-            ]
-
-            # 仅当使用了 Claude 的修订追踪时才需要进行修订验证
-            if not claude_del_elements and not claude_ins_elements:
-                if self.verbose:
-                    print("通过 - 未发现 Claude 的修订追踪。")
-                return True
-
-        except Exception:
-            # 如果无法解析 XML，继续完整验证
-            pass
-
-        # 创建临时目录以解压原始 docx
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
-            # 解压原始 docx
             try:
                 with zipfile.ZipFile(self.original_docx, "r") as zip_ref:
-                    zip_ref.extractall(temp_path)
+                    safe_extract(zip_ref, temp_path)
             except Exception as e:
-                print(f"失败 - 解压原始 docx 时出错: {e}")
+                print(f"FAILED - Error unpacking original docx: {e}")
                 return False
 
             original_file = temp_path / "word" / "document.xml"
             if not original_file.exists():
                 print(
-                    f"失败 - 在 {self.original_docx} 中未找到原始 document.xml"
+                    f"FAILED - Original document.xml not found in {self.original_docx}"
                 )
                 return False
 
-            # 使用 xml.etree.ElementTree 解析两个 XML 文件进行修订验证
             try:
-                import xml.etree.ElementTree as ET
-
                 modified_tree = ET.parse(modified_file)
                 modified_root = modified_tree.getroot()
                 original_tree = ET.parse(original_file)
                 original_root = original_tree.getroot()
-            except ET.ParseError as e:
-                print(f"失败 - 解析 XML 文件时出错: {e}")
+            except (ET.ParseError, DefusedXmlException) as e:
+                print(f"FAILED - Error parsing XML files: {e}")
                 return False
 
-            # 从两个文档中移除 Claude 的修订追踪
-            self._remove_claude_tracked_changes(original_root)
-            self._remove_claude_tracked_changes(modified_root)
+            new_changes = self._new_tracked_changes(original_root, modified_root)
+            self._remove_tracked_changes(modified_root, new_changes)
 
-            # 提取并比较文本内容
             modified_text = self._extract_text_content(modified_root)
             original_text = self._extract_text_content(original_root)
 
             if modified_text != original_text:
-                # 显示每个段落的详细字符级差异
                 error_message = self._generate_detailed_diff(
                     original_text, modified_text
                 )
@@ -108,55 +81,121 @@ class RedliningValidator:
                 return False
 
             if self.verbose:
-                print("通过 - Claude 的所有更改都已正确追踪")
+                print(
+                    f"PASSED - All {len(new_changes)} change(s) against the original "
+                    "are properly tracked"
+                )
             return True
 
+    def _tracked_change_elements(self, root):
+        ins_tag = f"{{{self.namespaces['w']}}}ins"
+        del_tag = f"{{{self.namespaces['w']}}}del"
+        return [elem for elem in root.iter() if elem.tag in (ins_tag, del_tag)]
+
+    def _rendered_text(self, elem):
+        preserve = elem.get("{http://www.w3.org/XML/1998/namespace}space") == "preserve"
+        return rendered_text(elem.text or "", preserve)
+
+    def _text_elements(self, elem):
+        w = self.namespaces["w"]
+        return [
+            node
+            for node in elem.iter()
+            if node.tag in (f"{{{w}}}t", f"{{{w}}}delText")
+        ]
+
+    def _tracked_change_key(self, elem):
+        w = self.namespaces["w"]
+        text = "".join(self._rendered_text(node) for node in self._text_elements(elem))
+        return (elem.tag, elem.get(f"{{{w}}}author"), elem.get(f"{{{w}}}date"), text)
+
+    def _new_tracked_changes(self, original_root, modified_root):
+        original = self._tracked_change_elements(original_root)
+        modified = self._tracked_change_elements(modified_root)
+
+        pool = {}
+        for elem in original:
+            pool.setdefault(self._tracked_change_key(elem), []).append(elem)
+
+        matched, leftover = set(), []
+        for elem in modified:
+            bucket = pool.get(self._tracked_change_key(elem))
+            if bucket:
+                matched.add(bucket.pop())
+            else:
+                leftover.append(elem)
+
+        def group(elem):
+            return self._tracked_change_key(elem)[:3]
+
+        def text_of(elems):
+            return "".join(self._tracked_change_key(e)[3] for e in elems)
+
+        unmatched_original = {}
+        for elem in original:
+            if elem not in matched:
+                unmatched_original.setdefault(group(elem), []).append(elem)
+
+        by_group = {}
+        for elem in leftover:
+            by_group.setdefault(group(elem), []).append(elem)
+
+        new = set()
+        for key, elems in by_group.items():
+            rebuilt = text_of(elems)
+            if rebuilt and rebuilt == text_of(unmatched_original.get(key, [])):
+                continue  
+            new.update(elems)
+        return new
+
     def _generate_detailed_diff(self, original_text, modified_text):
-        """使用 git word diff 生成详细的单词级差异。"""
         error_parts = [
-            "失败 - 移除 Claude 的修订追踪后文档文本不匹配",
+            "FAILED - Document text doesn't match after removing the tracked changes",
             "",
-            "可能的原因:",
-            "  1. 修改了其他作者 <w:ins> 或 <w:del> 标签内的文本",
-            "  2. 未使用正确的修订追踪进行编辑",
-            "  3. 删除他人的插入时未将 <w:del> 嵌套在 <w:ins> 内",
+            "Likely causes:",
+            "  1. Modified text inside another author's <w:ins> or <w:del> tags",
+            "  2. Made edits without proper tracked changes",
+            "  3. Didn't nest <w:del> inside <w:ins> when deleting another's insertion",
+            "  4. Rewrote another author's <w:ins>/<w:del> and changed its text on",
+            "     the way. A tracked change from the original is recognised by its",
+            "     author, date and text; anything that doesn't reproduce one exactly",
+            "     reads as new, and the text it carried is reported missing.",
             "",
-            "对于预先标记的文档，使用正确的模式:",
-            "  - 要拒绝他人的插入: 将 <w:del> 嵌套在其 <w:ins> 内",
-            "  - 要恢复他人的删除: 在其 <w:del> 之后添加新的 <w:ins>",
+            "For pre-redlined documents, use correct patterns:",
+            "  - To reject another's INSERTION: Nest <w:del> inside their <w:ins>",
+            "  - To reject PART of one: nest <w:del> around only the runs you reject.",
+            "    Their <w:ins> may be split around it, so long as the pieces keep",
+            "    their author and date and still spell out the same text.",
+            "  - To restore another's DELETION: Add new <w:ins> AFTER their <w:del>",
             "",
         ]
 
-        # 显示 git word diff
         git_diff = self._get_git_word_diff(original_text, modified_text)
         if git_diff:
-            error_parts.extend(["差异:", "============", git_diff])
+            error_parts.extend(["Differences:", "============", git_diff])
         else:
-            error_parts.append("无法生成单词差异（git 不可用）")
+            error_parts.append("Unable to generate word diff (git not available)")
 
         return "\n".join(error_parts)
 
     def _get_git_word_diff(self, original_text, modified_text):
-        """使用 git 生成字符级精确的单词差异。"""
         try:
             with tempfile.TemporaryDirectory() as temp_dir:
                 temp_path = Path(temp_dir)
 
-                # 创建两个文件
                 original_file = temp_path / "original.txt"
                 modified_file = temp_path / "modified.txt"
 
                 original_file.write_text(original_text, encoding="utf-8")
                 modified_file.write_text(modified_text, encoding="utf-8")
 
-                # 首先尝试字符级差异以获得精确的差异
                 result = subprocess.run(
                     [
                         "git",
                         "diff",
                         "--word-diff=plain",
-                        "--word-diff-regex=.",  # 逐字符差异
-                        "-U0",  # 零行上下文 - 只显示更改的行
+                        "--word-diff-regex=.",  
+                        "-U0",  
                         "--no-index",
                         str(original_file),
                         str(modified_file),
@@ -166,9 +205,7 @@ class RedliningValidator:
                 )
 
                 if result.stdout.strip():
-                    # 清理输出 - 移除 git diff 头行
                     lines = result.stdout.split("\n")
-                    # 跳过头行（diff --git、index、+++、---、@@）
                     content_lines = []
                     in_content = False
                     for line in lines:
@@ -181,13 +218,12 @@ class RedliningValidator:
                     if content_lines:
                         return "\n".join(content_lines)
 
-                # 如果字符级差异太冗长则回退到单词级差异
                 result = subprocess.run(
                     [
                         "git",
                         "diff",
                         "--word-diff=plain",
-                        "-U0",  # 零行上下文
+                        "-U0",  
                         "--no-index",
                         str(original_file),
                         str(modified_file),
@@ -209,65 +245,50 @@ class RedliningValidator:
                     return "\n".join(content_lines)
 
         except (subprocess.CalledProcessError, FileNotFoundError, Exception):
-            # Git 不可用或其他错误，返回 None 使用回退方案
             pass
 
         return None
 
-    def _remove_claude_tracked_changes(self, root):
-        """从 XML 根元素中移除 Claude 作者的修订追踪。"""
+    def _remove_tracked_changes(self, root, targets):
         ins_tag = f"{{{self.namespaces['w']}}}ins"
         del_tag = f"{{{self.namespaces['w']}}}del"
-        author_attr = f"{{{self.namespaces['w']}}}author"
 
-        # 移除 w:ins 元素
         for parent in root.iter():
             to_remove = []
             for child in parent:
-                if child.tag == ins_tag and child.get(author_attr) == "Claude":
+                if child.tag == ins_tag and child in targets:
                     to_remove.append(child)
             for elem in to_remove:
                 parent.remove(elem)
 
-        # 展开 author 为 "Claude" 的 w:del 元素中的内容
         deltext_tag = f"{{{self.namespaces['w']}}}delText"
         t_tag = f"{{{self.namespaces['w']}}}t"
 
         for parent in root.iter():
             to_process = []
             for child in parent:
-                if child.tag == del_tag and child.get(author_attr) == "Claude":
+                if child.tag == del_tag and child in targets:
                     to_process.append((child, list(parent).index(child)))
 
-            # 逆序处理以维护索引
             for del_elem, del_index in reversed(to_process):
-                # 移动前将 w:delText 转换为 w:t
                 for elem in del_elem.iter():
                     if elem.tag == deltext_tag:
                         elem.tag = t_tag
 
-                # 将 w:del 的所有子元素移动到其父元素，然后移除 w:del
                 for child in reversed(list(del_elem)):
                     parent.insert(del_index, child)
                 parent.remove(del_elem)
 
     def _extract_text_content(self, root):
-        """从 Word XML 中提取文本内容，保留段落结构。
-
-        跳过空段落以避免当修订追踪的插入仅添加结构元素而无文本内容时出现误报。
-        """
         p_tag = f"{{{self.namespaces['w']}}}p"
         t_tag = f"{{{self.namespaces['w']}}}t"
 
         paragraphs = []
         for p_elem in root.findall(f".//{p_tag}"):
-            # 获取此段落内的所有文本元素
             text_parts = []
             for t_elem in p_elem.findall(f".//{t_tag}"):
-                if t_elem.text:
-                    text_parts.append(t_elem.text)
+                text_parts.append(self._rendered_text(t_elem))
             paragraph_text = "".join(text_parts)
-            # 跳过空段落 - 它们不影响内容验证
             if paragraph_text:
                 paragraphs.append(paragraph_text)
 
@@ -275,4 +296,4 @@ class RedliningValidator:
 
 
 if __name__ == "__main__":
-    raise RuntimeError("此模块不应直接运行。")
+    raise RuntimeError("This module should not be run directly.")
