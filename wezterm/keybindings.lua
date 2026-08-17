@@ -23,7 +23,7 @@ function M.apply(config)
 		{ key = "F11", mods = "NONE", action = wezterm.action.ToggleFullScreen },
 		-- Leader + m:隐藏窗口
 		{ key = "m", mods = "LEADER", action = wezterm.action.Hide },
-		-- Leader + n:新建窗口（由 window.lua 统一最大化）
+		-- Leader + n:新建窗口
 		{ key = "n", mods = "LEADER", action = wezterm.action.SpawnWindow },
 		-- Leader + w:关闭当前标签页(不确认)
 		{ key = "w", mods = "LEADER", action = wezterm.action.CloseCurrentTab({ confirm = false }) },
