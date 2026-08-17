@@ -1,76 +1,76 @@
-# 结构：落点判据、常量管理、规模阈值、死代码清理
+# Structure: Placement Criteria, Constant Management, Size Thresholds, and Dead Code Cleanup
 
 ---
 
-## 一、新代码放在哪
+## 1. Where New Code Should Go
 
-### 决策顺序
+### Decision Order
 
-1. **已有同职责的模块？** → 放进去，复用其内部工具与约定。
-2. **没有，但存在同层的兄弟模块？** → 按兄弟模块的命名与组织方式新建同层文件。
-3. **属于新的一层职责？** → 新建模块，并在落点声明里说明它的职责边界与依赖方向。
+1. **Is there already a module with the same responsibility?** → Put the code there and reuse its internal utilities and conventions.
+2. **If not, are there sibling modules at the same layer?** → Create a peer file following the naming and organizational conventions of those sibling modules.
+3. **Does it represent a new layer of responsibility?** → Create a new module and explain its responsibility boundary and dependency direction in the placement rationale.
 
-先读目标文件与相邻模块再决定，不要凭想象放置。
+Read the target file and adjacent modules before deciding where to place new code. Do not place it based on assumptions.
 
-### 落点判据
+### Placement Criteria
 
-| 情况 | 落点 |
+| Situation | Placement |
 | --- | --- |
-| 纯计算、无 IO、无框架依赖 | 领域/工具层，保持可单测、不引入框架依赖 |
-| 访问数据库、文件、网络 | 数据访问/适配层，对上暴露语义化接口而非 SQL/URL |
-| 编排多个步骤、事务边界 | 服务/用例层 |
-| 解析请求、返回响应、命令行参数 | 接口/入口层，不写业务规则 |
-| 只被一个函数使用的辅助逻辑 | 就近私有函数，不要提前提到公共模块 |
-| 被 3 处以上使用的辅助逻辑 | 提到共享模块，并给它一个准确的名字 |
+| Pure computation, no I/O, no framework dependency | Domain/utility layer; keep it unit-testable and free of framework dependencies |
+| Accessing databases, files, or networks | Data-access/adapter layer; expose semantic interfaces upward rather than SQL/URLs |
+| Orchestrating multiple steps or defining transaction boundaries | Service/use-case layer |
+| Parsing requests, producing responses, handling command-line arguments | Interface/entry layer; do not put business rules here |
+| Helper logic used by only one function | Keep it as a nearby private function; do not prematurely move it into a shared module |
+| Helper logic used in 3 or more places | Move it into a shared module and give it an accurate, responsibility-specific name |
 
-### 依赖方向
+### Dependency Direction
 
-- 依赖单向流动：入口层 → 服务层 → 领域层；底层不得反向依赖上层。
-- 出现循环依赖 → 说明职责划分错了，把共用部分下沉，而不是加接口绕过。
-- 领域层不 import 框架、ORM、HTTP 客户端。
+- Dependencies must flow in one direction: entry layer → service layer → domain layer; lower layers must not depend back on higher layers.
+- Circular dependencies indicate incorrect responsibility boundaries. Move shared parts downward instead of adding interfaces merely to work around the cycle.
+- The domain layer must not import frameworks, ORMs, or HTTP clients.
 
-### 不要做的事
+### Do Not
 
-- 不为一个函数新建一个模块。
-- 不新建 `utils.py` / `common.py` / `helpers.py` 这类无职责命名的杂物文件；已有的可以用，但新代码要放进语义明确的模块。
-- 不因为"这个文件已经很长"就把不相关的东西拆出去 —— 拆分依据是职责，不是行数。
+- Do not create an entire module for a single function.
+- Do not create grab-bag files with responsibility-free names such as `utils.py` / `common.py` / `helpers.py`. Existing ones may still be used, but new code should go into semantically clear modules.
+- Do not split unrelated things out merely because "this file is already long" — split by responsibility, not by line count.
 
 ---
 
-## 二、常量管理
+## 2. Constant Management
 
-### 必须命名的字面量
+### Literals That Must Be Named
 
-代码里不出现意义需要猪测的裸值。下列一律先命名再使用：
+Do not leave raw values in code when their meaning has to be guessed. The following must always be named before use:
 
-| 类别 | 例子 |
+| Category | Examples |
 | --- | --- |
-| 时间与重试 | 超时时长、轮询间隔、重试次数、退避倍数、缓存 TTL |
-| 容量与阈值 | 批量大小、分页条数、连接池上限、告警水位、长度限制 |
-| 网络与路径 | 端口、主机名、URL、路径片段、文件名、环境变量名 |
-| 标识与标签 | 状态名、类型标签、错误码、权限名、事件名、表名/字段名 |
-| 换算因子 | 1024、1000、60、3600、单位系数、缩放比例 |
-| 业务魔数 | 费率、折扣、上限天数、等级分界值 |
-| 工程元数据 | 版本号、包名、构建号、协议版本 |
+| Time and retries | Timeout duration, polling interval, retry count, backoff multiplier, cache TTL |
+| Capacity and thresholds | Batch size, page size, connection-pool limit, alert threshold, length limit |
+| Network and paths | Ports, hostnames, URLs, path fragments, filenames, environment-variable names |
+| Identifiers and labels | Status names, type tags, error codes, permission names, event names, table/field names |
+| Conversion factors | 1024, 1000, 60, 3600, unit coefficients, scaling ratios |
+| Business magic numbers | Rates, discounts, maximum day counts, level boundaries |
+| Engineering metadata | Version numbers, package names, build numbers, protocol versions |
 
-### 免命名白名单
+### Naming Exemption Whitelist
 
-以下允许直接写，强行命名反而降低可读性：
+The following may be written directly; forcing names onto them would reduce readability:
 
-- `0` / `1` / `-1` 作为自然边界：索引起点、步长、空判断、自增。
-- 空字符串、空集合、`null` / `None`。
-- 数学定义式里的固有系数（求中点的 `/2`、平方的 `**2`）。
-- 测试用例中的示例数据与期望值。
-- 正则表达式中自身即语义的字符。
+- `0` / `1` / `-1` when used as natural boundaries: index starts, step sizes, emptiness checks, increments.
+- Empty strings, empty collections, `null` / `None`.
+- Intrinsic coefficients in mathematical formulas (such as `/2` for a midpoint or `**2` for squaring).
+- Example data and expected values in tests.
+- Characters in regular expressions whose semantics are self-evident.
 
-白名单之外都要命名。判断标准：**改这个值时，需要知道它代表什么吗？需要 → 命名。**
+Everything outside this whitelist must be named. Rule of thumb: **when changing this value, do you need to know what it represents? If yes → name it.**
 
 ```python
-# 反例：30 是什么？"pending" 写错一个字母也不报错
+# Bad: what does 30 mean? A typo in "pending" will not be caught.
 if time.time() - task.created_at > 30 and task.status == "pending":
     retry(task, times=3)
 
-# 正例
+# Good
 PENDING_TIMEOUT_SECONDS = 30
 MAX_RETRY_ATTEMPTS = 3
 
@@ -78,40 +78,40 @@ if time.time() - task.created_at > PENDING_TIMEOUT_SECONDS and task.status is Ta
     retry(task, times=MAX_RETRY_ATTEMPTS)
 ```
 
-### 作用域：就近定义，逐级上提
+### Scope: Define Locally First, Promote Gradually
 
-| 使用范围 | 定义位置 |
+| Usage scope | Definition location |
 | --- | --- |
-| 单个函数内 | 函数内局部常量 |
-| 同文件多处 | 模块顶部常量 |
-| 多个模块 | 共享常量模块，名字要有职责（`limits.py` 而非 `constants.py` 堆杂） |
-| 运行时可变 / 分环境不同 | 配置项，不是常量 |
+| Within one function | Local constant inside the function |
+| Multiple places in the same file | Module-level constant |
+| Multiple modules | Shared constant module with a responsibility-specific name (`limits.py`, not a catch-all `constants.py`) |
+| Runtime-variable / environment-specific | Configuration, not a constant |
 
-不要把只服务于一个函数的值抬到全局；也不要把多处共用的值在各文件里各定义一遍。
+Do not promote a value that serves only one function to global scope; likewise, do not redefine a shared value independently in multiple files.
 
-区分常量与配置：部署时可能需要改的（端口、地址、开关、限额）属于配置，要能从配置文件/环境变量注入，不要硬编码成常量。
+Distinguish constants from configuration: values that may need to change at deployment time (ports, addresses, feature switches, quotas) belong in configuration and should be injectable via configuration files/environment variables rather than hard-coded as constants.
 
-### 单一真相源
+### Single Source of Truth
 
-已存在于工程文件的值，从原生处读取，不在代码里再抄一份。命名了但拄了一份副本，依旧是缺陷 —— 发版时必定不同步。
+If a value already exists in a project-native file, read it from the original source instead of copying it into code. Naming a duplicate does not solve the problem — it is still a defect because the copies will eventually drift during releases.
 
 ```python
-# 反例 1：裸字面量
+# Bad 1: raw literal
 print("myapp v1.1.1.0")
 
-# 反例 2：命名了，但与 pyproject.toml 各写一遍
+# Bad 2: named, but duplicated separately from pyproject.toml
 VERSION = "1.1.1.0"
 
-# 正例：从包元数据读
+# Good: read from package metadata
 from importlib.metadata import version
 __version__ = version("myapp")
 ```
 
-各生态的原生来源：Node 读 `package.json`（或构建时注入）、Rust 用 `env!("CARGO_PKG_VERSION")`、Go 用 `-ldflags -X` 注入、Java 读 manifest。同理适用于：表结构（从模型/迁移定义取）、API 路由（从路由注册取）、枚举取值范围（从枚举类型取）。
+Native sources by ecosystem: Node reads `package.json` (or injects the value at build time), Rust uses `env!("CARGO_PKG_VERSION")`, Go injects via `-ldflags -X`, and Java reads the manifest. The same principle applies to table schemas (derive from models/migrations), API routes (derive from route registration), and enum value ranges (derive from the enum type).
 
-### 一组取值用枚举
+### Use Enums for Value Sets
 
-状态名、类型标签、错误码、模式开关这类**成组出现且互斥**的取值，用语言的枚举设施承载，不要散成一堆字符串常量。
+For values such as status names, type tags, error codes, and mode switches that **belong to a mutually exclusive set**, use the language's enum facilities instead of scattering them across string constants.
 
 ```python
 class TaskStatus(str, Enum):
@@ -120,82 +120,82 @@ class TaskStatus(str, Enum):
     DONE    = "done"
 ```
 
-收益：拼错在静态检查阶段就暴露；可枚举全部取值；直接对接 `patterns.md` 的查表分发与状态机转换表。
+Benefits: typos are exposed during static checking; all valid values can be enumerated; the values integrate directly with table-driven dispatch and state-machine transition tables in `patterns.md`.
 
-各语言设施：Python `Enum` / `StrEnum`、TypeScript 字符串联合类型或 `as const`、Go `iota` + 具名类型、Java/C# `enum`、Rust `enum`。
+Language facilities: Python `Enum` / `StrEnum`, TypeScript string union types or `as const`, Go `iota` + named types, Java/C# `enum`, Rust `enum`.
 
-### 命名要求
+### Naming Requirements
 
-常量名要说清楚**含义与单位**，不是复述值：
+Constant names must clearly describe **meaning and unit**, not merely restate the value:
 
+```text
+Bad: THIRTY = 30, NUM_1024 = 1024, TIMEOUT = 5
+Good: PENDING_TIMEOUT_SECONDS = 30, BYTES_PER_KIB = 1024, HTTP_CONNECT_TIMEOUT_SECONDS = 5
 ```
-反例：THIRTY = 30、NUM_1024 = 1024、TIMEOUT = 5
-正例：PENDING_TIMEOUT_SECONDS = 30、BYTES_PER_KIB = 1024、HTTP_CONNECT_TIMEOUT_SECONDS = 5
-```
 
-带单位的量必须把单位写进名字（`_SECONDS` / `_MS` / `_BYTES` / `_PERCENT`），否则调用方会传错量级。
+Quantities with units must include the unit in the name (`_SECONDS` / `_MS` / `_BYTES` / `_PERCENT`), otherwise callers may use the wrong scale.
 
 ---
 
-## 三、规模阈值（软阈值，超过即需要理由）
+## 3. Size Thresholds (Soft Thresholds; Exceeding Them Requires Justification)
 
-| 对象 | 阈值 | 超过时怎么办 |
+| Object | Threshold | What to do when exceeded |
 | --- | --- | --- |
-| 函数 | ~50 行 | 找出其中语义独立的段落，抽成有名字的函数；抽不出说明它本就是一段流程，可以保留 |
-| 函数参数 | 5 个 | 看是否有天然聚合的参数对象；或函数承担了多个职责 |
-| 嵌套深度 | 3 层 | 早返回、卫语句、提取函数 |
-| 圈复杂度 | 分支+循环 > 10 | 查表分发（见 patterns.md）或拆分 |
-| 文件 | ~400 行 | 按职责拆，不按行数硬切 |
-| 类的公开方法 | ~10 个 | 检查是否混入了多个职责 |
+| Function | ~50 lines | Identify semantically independent sections and extract them into named functions; if no meaningful extraction exists because it is genuinely one sequential flow, it may remain as-is |
+| Function parameters | 5 | Check whether the parameters naturally form a parameter object, or whether the function is handling multiple responsibilities |
+| Nesting depth | 3 levels | Use early returns, guard clauses, or extracted functions |
+| Cyclomatic complexity | Branches + loops > 10 | Use table-driven dispatch (see `patterns.md`) or split the logic |
+| File | ~400 lines | Split by responsibility, not by mechanically cutting at a line count |
+| Public methods on a class | ~10 | Check whether multiple responsibilities have been mixed together |
 
-阈值是提示，不是硬性上限。超过时在报告里说明为什么保留。
-
----
-
-## 四、单一职责的可操作判据
-
-判断一个函数/类是否职责过多，看这三条：
-
-1. 描述它做什么时需要用「并且」/「同时」—— 大概率两个职责。
-2. 修改原因不止一个（业务规则变要改它，存储方式变也要改它）。
-3. 名字里出现 `handle` / `process` / `manage` / `do` 这类无信息量的动词，且没法换成更具体的词。
+These thresholds are signals, not hard limits. If you exceed one, explain in the report why keeping the current structure is justified.
 
 ---
 
-## 五、死代码清理
+## 4. Operational Criteria for Single Responsibility
 
-### 必须清理（改动波及范围内）
+To determine whether a function/class has too many responsibilities, check these three signals:
 
-本次改动直接导致失效的：
+1. Describing what it does requires using "and" / "at the same time" — it probably has two responsibilities.
+2. It has more than one reason to change (for example, both business-rule changes and storage-layer changes require modifying it).
+3. Its name contains low-information verbs such as `handle` / `process` / `manage` / `do`, and there is no obvious more specific verb you can replace them with.
 
-- 不再被引用的 import / require。
-- 不再被读取的变量、字段、常量。
-- 不再被调用的函数、方法、类。
-- 条件恒真/恒假后剩下的死分支。
-- 被替换掉的旧实现（不要留着"以防万一"，版本控制就是保险）。
-- 已废弃配置项及其文档说明。
-- 只测试被删逻辑的测试用例。
-- 因功能移除而失效的注释。
+---
 
-被改动文件内，扫描一遍是否有已无调用方的符号，一并删除。
+## 5. Dead Code Cleanup
 
-### 必须报告但不主动删（改动范围之外）
+### Must Be Cleaned Up (Within the Scope Affected by the Change)
 
-在其他文件里发现的历史死代码：在报告里列出路径与符号名，不动它。除非用户要求清理。
+Remove anything made obsolete directly by the current change:
 
-### 清理前的确认
+- Imports / requires that are no longer referenced.
+- Variables, fields, or constants that are no longer read.
+- Functions, methods, or classes that are no longer called.
+- Dead branches left behind after conditions become always true or always false.
+- Old implementations replaced by the new one (do not keep them "just in case"; version control is the backup).
+- Deprecated configuration options and their documentation.
+- Tests that only covered logic that has now been removed.
+- Comments invalidated by removed functionality.
 
-删除前确认没有隐式引用：
+Within modified files, scan once for symbols that no longer have callers and remove them as part of the change.
+
+### Must Be Reported but Not Deleted Proactively (Outside the Change Scope)
+
+If you discover historical dead code in other files, list the path and symbol name in the report, but do not modify it unless the user explicitly asks for cleanup.
+
+### Confirmation Before Deletion
+
+Before deleting, confirm that there are no implicit references:
 
 ```bash
 rg -n '\bsymbol_name\b' --glob '!*.lock'
 ```
 
-注意这些搜索抓不到的用法：反射/动态调用（`getattr`、`eval`、字符串拼出的方法名）、依赖注入容器的注册、配置文件或模板里的引用、公开 API（下游可能在用）、插件入口点、序列化字段名。命中这些情况就不要删，在报告中说明。
+Be aware that this search cannot detect usages such as: reflection/dynamic invocation (`getattr`, `eval`, method names assembled as strings), dependency-injection container registrations, references in configuration files or templates, public APIs that downstream consumers may use, plugin entry points, and serialized field names. If any of these cases apply, do not delete the symbol; explain the concern in the report.
 
-### 禁止的伪清理
+### Forbidden Fake Cleanup
 
-- 保留 `_unused` 重命名的变量。
-- 留下 `// 已移除 xxx` 之类的墓碑注释。
-- 把代码注释掉而不是删除。
-- 为已删除的东西保留兼容性再导出、空壳函数或转发桩（除非明确需要对外兼容）。
+- Renaming an unused variable to `_unused` and keeping it.
+- Leaving tombstone comments such as `// removed xxx`.
+- Commenting code out instead of deleting it.
+- Keeping compatibility re-exports, empty shell functions, or forwarding stubs for deleted functionality unless external compatibility is explicitly required.

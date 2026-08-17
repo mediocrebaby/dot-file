@@ -1,125 +1,125 @@
-# 健壮性：失败路径、错误信息、性能陷阱
+# Robustness: Failure Paths, Error Messages, and Performance Traps
 
 ---
 
-## 一、必须处理的边界 vs 必须放行的边界
+## 1. Boundaries That Must Be Handled vs. Cases That Must Be Allowed to Propagate
 
-**必须处理**（不处理即为缺陷）：
+**Must be handled** (failing to handle these is a defect):
 
-| 边界 | 必须覆盖的失败 |
+| Boundary | Failures that must be covered |
 | --- | --- |
-| 外部输入 | 用户输入、请求参数、配置文件、环境变量、命令行参数：缺失、类型错、越界、格式非法 |
-| 文件与网络 IO | 不存在、无权限、连接失败、超时、中途断开、返回非预期状态码 |
-| 序列化 / 解析 | JSON/YAML/XML 解析失败、字段缺失、编码错误 |
-| 进程边界 | 子进程非零退出、stderr 内容、进程被杀 |
-| 并发 | 竞态、超时、取消、死锁风险点 |
-| 资源释放 | 文件句柄、连接、锁、临时文件：异常路径下也必须释放（用 with / defer / try-finally） |
-| 外部依赖返回值 | 可能为空的查询结果、可能失败的第三方调用 |
+| External input | User input, request parameters, configuration files, environment variables, command-line arguments: missing values, type mismatches, out-of-range values, invalid formats |
+| File and network I/O | File/resource not found, permission denied, connection failure, timeout, mid-stream disconnect, unexpected status codes |
+| Serialization / parsing | JSON/YAML/XML parsing failures, missing fields, encoding errors |
+| Process boundaries | Non-zero child-process exit codes, stderr output, process termination |
+| Concurrency | Race conditions, timeouts, cancellation, potential deadlock points |
+| Resource cleanup | File handles, connections, locks, temporary files: must also be released on exception paths (use `with` / `defer` / `try-finally`) |
+| Return values from external dependencies | Query results that may be empty, third-party calls that may fail |
 
-**必须放行**（写了就是噪音）：
+**Must be allowed to propagate** (handling these explicitly only adds noise):
 
-- 内部函数之间的不变量 —— 由调用方保证的前置条件不重复校验。
-- 类型系统已经保证的情况。
-- 不可能发生的分支 —— 与其写 `else: pass`，不如让它抛出。
-- 拿不准要不要处理时，让错误向上传播，而不是就地吞掉。
+- Invariants between internal functions — do not repeatedly validate preconditions already guaranteed by the caller.
+- Cases already guaranteed by the type system.
+- Impossible branches — instead of writing `else: pass`, let them fail.
+- When uncertain whether an error should be handled locally, let it propagate upward rather than swallowing it in place.
 
-**处理 ≠ 捕获**：绝大多数情况下正确的"处理"是补充上下文后继续向上抛，只有在真正能做出决策的层级（重试、降级、返回错误响应）才捕获。
-
----
-
-## 二、错误信息规程
-
-### 硬性要求
-
-每条错误信息必须包含：
-
-1. **发生了什么** —— 失败的具体操作。
-2. **为什么** —— 底层原因（原始异常信息，不是异常类名）。
-3. **上下文** —— 让人能直接定位的关键参数：地址、路径、ID、行号、耗时、重试次数。
-
-```
-反例：连接失败
-反例：数据库错误
-反例：ValueError
-反例：处理失败: <class 'KeyError'>
-
-正例：连接 Postgres 10.0.0.5:5432 失败：连接超时（timeout=5s，第 3 次重试）
-正例：读取配置 /etc/app/conf.yaml 失败：第 12 行 YAML 语法错误 —— mapping values are not allowed here
-正例：批量写入 orders 表失败：3 行违反唯一约束 uk_order_no，冲突单号 [A1001, A1003, A1009]
-```
-
-### 禁令
-
-- **禁止空 catch**：`except: pass` / `catch (e) {}` —— 异常被吞掉后问题只会在更远的地方以更难懂的形式爆发。
-- **禁止只打印 `str(e)` 而丢掉堆栈**：日志异常必须带堆栈（`logger.exception(...)` / `logger.error(..., exc_info=True)` / 打印 `error.stack`）。
-- **禁止包装时丢失 cause**：重抛必须链接原始异常（`raise X(...) from e` / `new Error(msg, { cause: e })` / `fmt.Errorf("...: %w", err)`）。
-- **禁止捕获过宽**：只捕获你真正能处理的异常类型，不要用 `except Exception` 罩住整段逻辑。
-- **禁止把错误信息当控制流**：不要靠匹配错误文本来做分支判断。
-
-### 参数脱敏
-
-上下文里带密码、token、密钥、身份证、手机号时，做掩码后再输出（`sk-****abcd`），不要因为要"信息完整"而把凭据写进日志。
-
-### 日志层次
-
-- 同一个异常只在**能做决策的那一层**记录一次，不要每层都 log 一遍产生重复堆栈。
-- 循环里的错误不要逐条刷日志，聚合后一次性输出（含失败条数与前若干个样本）。
-- 级别：可恢复且已降级 → WARNING；请求失败但服务正常 → ERROR；进程无法继续 → CRITICAL。调试细节用 DEBUG，不要塞进 INFO。
+**Handling ≠ catching**: In most cases, the correct way to "handle" an error is to add context and rethrow it. Catch it only at a layer that can actually make a decision, such as retrying, degrading gracefully, or returning an error response.
 
 ---
 
-## 三、性能陷阱清单
+## 2. Error Message Rules
 
-写完自查，命中任意一条就改。
+### Mandatory Requirements
 
-### 1. 循环内做逐条 IO / 查询（最高频缺陷）
+Every error message must include:
+
+1. **What happened** — the specific operation that failed.
+2. **Why** — the underlying cause (the original exception message, not merely the exception class name).
+3. **Context** — key parameters that allow direct diagnosis: address, path, ID, line number, elapsed time, retry count.
+
+```text
+Bad: Connection failed
+Bad: Database error
+Bad: ValueError
+Bad: Processing failed: <class 'KeyError'>
+
+Good: Failed to connect to Postgres 10.0.0.5:5432: connection timed out (timeout=5s, retry 3)
+Good: Failed to read configuration /etc/app/conf.yaml: YAML syntax error at line 12 — mapping values are not allowed here
+Good: Batch insert into the orders table failed: 3 rows violated unique constraint uk_order_no; conflicting order numbers: [A1001, A1003, A1009]
+```
+
+### Prohibitions
+
+- **No empty catch blocks**: `except: pass` / `catch (e) {}` — once an exception is swallowed, the problem will only surface later in a more confusing form.
+- **Do not log only `str(e)` and discard the stack trace**: exception logs must include the stack trace (`logger.exception(...)` / `logger.error(..., exc_info=True)` / print `error.stack`).
+- **Do not lose the cause when wrapping an error**: rethrowing must preserve the original exception chain (`raise X(...) from e` / `new Error(msg, { cause: e })` / `fmt.Errorf("...: %w", err)`).
+- **Do not catch too broadly**: catch only the exception types you can actually handle; do not wrap an entire block of logic in `except Exception`.
+- **Do not use error messages as control flow**: do not branch by matching error-message text.
+
+### Sensitive Parameter Redaction
+
+If the context contains passwords, tokens, keys, identity numbers, or phone numbers, mask them before logging (for example, `sk-****abcd`). "Complete information" is not a justification for writing credentials into logs.
+
+### Logging Levels
+
+- Log the same exception only once, at the **layer that can make a decision**. Do not log it at every layer and generate duplicate stack traces.
+- Do not emit one log entry per failure inside a loop. Aggregate failures and log them once, including the failure count and a few representative samples.
+- Levels: recoverable and already degraded → WARNING; request failed but service remains healthy → ERROR; process cannot continue → CRITICAL. Use DEBUG for diagnostic details instead of stuffing them into INFO.
+
+---
+
+## 3. Performance Trap Checklist
+
+Review this after implementation. If any item matches, fix it.
+
+### 1. Per-Item I/O / Queries Inside a Loop (Most Common Defect)
 
 ```python
-# 反例：N 次往返
+# Bad: N round trips
 for order_id in order_ids:
     row = db.query("SELECT * FROM orders WHERE id = %s", order_id)
 
-# 正例：一次往返，交给数据库批量处理
+# Good: one round trip; let the database handle the batch
 rows = db.query("SELECT * FROM orders WHERE id = ANY(%s)", (order_ids,))
 by_id = {r.id: r for r in rows}
 ```
 
-同理适用于：循环内发 HTTP 请求（改批量接口或并发受控地发）、循环内读写文件、循环内单条 INSERT（改 `executemany` / 批量 INSERT）、ORM 懒加载导致的 N+1（预加载关联）。
+The same principle applies to: sending HTTP requests inside a loop (use a batch API or controlled concurrency instead), reading/writing files inside a loop, issuing one INSERT per iteration (use `executemany` / batch INSERT), and ORM lazy loading that causes N+1 queries (preload related data).
 
-### 2. 循环内做重复计算或重复构造
+### 2. Repeated Computation or Construction Inside a Loop
 
-编译正则、建立连接、读取配置、排序同一个列表 —— 提到循环外。
+Compiling regular expressions, establishing connections, reading configuration, sorting the same list — move these operations outside the loop.
 
-### 3. 不必要的全量拷贝
+### 3. Unnecessary Full Copies
 
-大列表/大字符串在每次迭代里切片、拼接、`+=`；能用迭代器/生成器/`join` 的地方做了物化。
+Repeatedly slicing, concatenating, or using `+=` on large lists/strings inside iterations; materializing data where iterators/generators/`join` could be used instead.
 
-### 4. 复杂度失控
+### 4. Uncontrolled Complexity
 
-嵌套循环做成员查找（`for a in A: for b in B: if a == b`）→ 改用集合/字典查找，O(n·m) 降为 O(n+m)。
+Nested loops used for membership lookup (`for a in A: for b in B: if a == b`) → use set/dictionary lookup instead, reducing O(n·m) to O(n+m).
 
-### 5. 无界增长
+### 5. Unbounded Growth
 
-缓存、队列、累积列表没有上限或淘汰策略；日志无轮转；一次性把整张表 / 整个文件读进内存 —— 改分页、流式、有界缓存。
+Caches, queues, or accumulating lists with no size limit or eviction policy; logs without rotation; loading an entire table / file into memory at once — use pagination, streaming, and bounded caches instead.
 
-### 6. 阻塞异步链路
+### 6. Blocking an Async Execution Path
 
-在 async 函数里调用同步阻塞 IO（`requests` / `time.sleep` / 同步文件读写），或在事件循环线程里做 CPU 密集计算 —— 换异步客户端或丢到线程/进程池。
+Calling synchronous blocking I/O inside an async function (`requests` / `time.sleep` / synchronous file I/O), or performing CPU-intensive computation on the event-loop thread — use an async client or move the work to a thread/process pool.
 
-### 7. 锁粒度过大
+### 7. Lock Scope Is Too Large
 
-持锁期间做 IO 或长计算；能用局部锁的地方用了全局锁。
+Performing I/O or long-running computation while holding a lock; using a global lock where a more localized lock would suffice.
 
-### 8. 未加索引的高频查询条件
+### 8. High-Frequency Query Conditions Without Indexes
 
-新增按某字段过滤的高频查询时，确认该字段有索引；不要在 WHERE 里对列做函数运算导致索引失效。
+When adding a frequently used query filter on a field, confirm that the field is indexed. Avoid applying functions to columns in the `WHERE` clause when doing so prevents index usage.
 
 ---
 
-## 四、不要做的"优化"
+## 4. "Optimizations" Not to Do
 
-- 没有实测数据就重写算法、加缓存层、引入并发。
-- 为了省几次函数调用而牺牲可读性。
-- 微优化（局部变量缓存属性、手动展开循环）—— 除非有 profile 结果支撑。
+- Do not rewrite algorithms, add caching layers, or introduce concurrency without measurement data.
+- Do not sacrifice readability merely to save a few function calls.
+- Do not perform micro-optimizations (such as caching object attributes in local variables or manually unrolling loops) unless profiling results justify them.
 
-原则：**避免已知陷阱是必须的，超出陷阱清单的优化需要证据。**
+Principle: **Avoiding known performance traps is mandatory; optimization beyond this checklist requires evidence.**

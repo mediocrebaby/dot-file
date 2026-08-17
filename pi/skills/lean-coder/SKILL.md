@@ -1,93 +1,94 @@
 ---
 name: lean-coder
-description: 编写或修改源码时的强制工程规范——落点先定、结构随信号选型、失败路径与错误上下文必须写全、循环内不做逐条 IO、不留裸字面量、改动波及的死代码必须清理，完成后逐项核对。TRIGGER：在第一次 Edit/Write 源码文件之前调用，包括新增功能、修 bug、重构、补测试、代码审查。SKIP：纯读代码解释、纯文档或纯配置改动。
+description: Write code in accordance with engineering standards. Supports languages such as TypeScript, C/C++, Python, Java, JavaScript, Golang, Rust, and C#. Commonly used before coding to familiarize yourself with the project's development standards, and during code reviews to verify whether the code complies with those standards.
 license: MIT
 ---
 
 # lean-coder
 
-写代码不是把功能跑通就结束。以下是硬性门禁，逐条可检验。
+Writing code does not end when the functionality works. The following are mandatory gates, and each item must be verifiable.
 
-## 优先级次序
+## Priority Order
 
-冲突时按此顺序取舍：
+When requirements conflict, make trade-offs in the following order:
 
-1. **正确性与健壮性** —— 含必须处理的失败路径
-2. **可维护性** —— 正确的落点与清晰边界
-3. **简洁性** —— 每行改动都能追溯到本次需求
-4. **与现有风格一致**
-5. **改动面尽量小** —— 但不以劣化结构为代价
-6. **性能合理** —— 避免已知陷阱，不做投机优化
+1. **Correctness and robustness** — including failure paths that must be handled
+2. **Maintainability** — correct placement and clear boundaries
+3. **Simplicity** — every changed line must be traceable to the current requirement
+4. **Consistency with the existing style**
+5. **Keep the change surface as small as possible** — but not at the cost of degrading the structure
+6. **Reasonable performance** — avoid known pitfalls; do not perform speculative optimization
 
-## 编码前：落点声明
+## Before Coding: Placement Declaration
 
-新建文件、改动公开接口或跨模块时，先输出一行再动手：
+When creating a new file, modifying a public interface, or making cross-module changes, output one line before making any changes:
 
+```markdown
+Placement: <which file to modify / what to create>; reuse <existing function/pattern>; do not <explicit structural changes that will not be made>
 ```
-落点：<改哪个文件/新建什么>；复用 <已有函数/模式>；不 <明确不做的结构改动>
-```
 
-单文件内部改动直接动手，不写声明。
 
-落点拿不准（该新建模块还是塞进现有文件、放哪一层、依赖方向如何）→ 读 `references/structure.md`。
+For changes contained within a single file, proceed directly without writing a declaration.
 
-## 编码中：门禁清单
+If the placement is unclear (whether to create a new module or put it into an existing file, which layer it belongs in, or what the dependency direction should be) → read `references/structure.md`.
 
-**结构选型**
+## During Coding: Gate Checklist
 
-- 代码里出现下列信号时，必须采用对应结构，不得用堆砌分支绕过：多分支判同一类型、对象存在阶段流转、全局唯一资源被重复创建、多处重复的前后置步骤。完整映射表见 `references/patterns.md`。
-- 不为只出现一次的逻辑创建抽象；不写「未来可能用到」的配置项、参数、扩展点。
-- 抽象由信号触发，不由想象触发。
+**Structure Selection**
 
-**健壮性**
+- When any of the following signals appear in the code, the corresponding structure must be used instead of working around it by piling up branches: multiple branches checking the same type, objects transitioning through stages, a globally unique resource being repeatedly created, or repeated pre/post-processing steps in multiple places. See `references/patterns.md` for the complete mapping table.
+- Do not create abstractions for logic that appears only once; do not add configuration options, parameters, or extension points for things that "might be needed in the future."
+- Abstractions must be triggered by signals, not by imagination.
 
-- 外部输入、IO/网络、进程与并发边界、资源释放：必须处理失败路径。
-- 内部不变量不写防御分支；错误默认向上传播。
-- 错误信息必须给出**原因 + 上下文**，不能只说操作失败。反例 `连接失败`；正例 `连接 10.0.0.5:5432 失败：连接超时（5s）`。
-- 禁止空 catch、禁止只打印 `str(e)` 丢掉堆栈、禁止包装异常时丢失 cause。
-- 详细边界与日志规程见 `references/robustness.md`。
+**Robustness**
 
-**常量**
+- External input, IO/network operations, process and concurrency boundaries, and resource cleanup: failure paths must be handled.
+- Do not add defensive branches for internal invariants; errors should propagate upward by default.
+- Error messages must include **cause + context**. Do not merely state that an operation failed. Bad example: `Connection failed`; good example: `Failed to connect to 10.0.0.5:5432: connection timed out (5s)`.
+- Empty catch blocks are forbidden. Do not print only `str(e)` and discard the stack trace. Do not lose the cause when wrapping exceptions.
+- See `references/robustness.md` for detailed boundary and logging rules.
 
-- 不留裸字面量。超时、重试次数、端口、阈值、容量、版本号、状态标签、路径片段、URL、单位换算因子、业务魔数：一律命名后使用。
-- 免命名白名单：作为自然边界的 `0 / 1 / -1`、空值、数学定义式里的固有系数、测试用例的示例数据、正则中自身即语义的字符。
-- 已存在于工程文件的值（版本号、包名、构建元数据）从原生来源读取，不在代码里再抄一份。
-- 一组相关取值（状态名、类型标签、错误码）用语言的枚举设施承载，不散成孤立常量。
-- 作用域就近，按使用范围逐级上提；运行时可变的是配置项，不是常量。细则见 `references/structure.md`。
+**Constants**
 
-**性能**
+- Leave no raw literals. Timeouts, retry counts, ports, thresholds, capacities, version numbers, status labels, path fragments, URLs, unit conversion factors, and business magic numbers must all be named before use.
+- Naming whitelist: `0 / 1 / -1` when used as natural boundaries, empty values, intrinsic coefficients in mathematical definitions, example data in test cases, and characters in regular expressions whose meaning is self-evident.
+- Values already present in project files (version numbers, package names, build metadata) must be read from their native source rather than duplicated in code.
+- A group of related values (status names, type labels, error codes) must use the language's enum facility rather than being scattered as isolated constants.
+- Keep scope as local as possible and promote it only as required by usage scope; runtime-variable values are configuration, not constants. See `references/structure.md` for details.
 
-- 循环内不做逐条 IO / 单条 SQL —— 改批量接口，让数据库或远端一次处理。
-- 热路径上不做重复计算、不做不必要的全量拷贝、不使用无界增长的集合。
-- 完整陷阱清单见 `references/robustness.md`。
+**Performance**
 
-**清理**
+- Do not perform per-item IO / individual SQL queries inside loops — use batch interfaces so the database or remote service can process them in one operation.
+- Do not perform repeated computation, unnecessary full copies, or use unbounded-growing collections on hot paths.
+- See `references/robustness.md` for the complete list of pitfalls.
 
-- 本次改动导致失效的 import、变量、函数、分支、配置项、测试：必须删除。
-- 被改动文件内已无调用方的符号：必须删除。
-- 改动范围之外的历史死代码：报告中提一句，不主动删。
-- 不「顺手改进」与本次需求无关的代码、注释或格式。
+**Cleanup**
 
-## 编码后：核对清单
+- Imports, variables, functions, branches, configuration items, and tests invalidated by the current change must be deleted.
+- Symbols in modified files that no longer have callers must be deleted.
+- Historical dead code outside the scope of the current change should be mentioned in the report, but not proactively removed.
+- Do not "improve along the way" any code, comments, or formatting unrelated to the current requirement.
 
-逐项回答，无则写「无」，不得略过：
+## After Coding: Verification Checklist
 
-1. **本次失效的符号**：逐个列出已删除的 import / 函数 / 分支 / 配置。
-2. **失败路径**：哪些已处理；错误信息包含哪些上下文。
-3. **循环内的 IO / 查询**：有 / 无，在哪一行。
-4. **裸字面量**：本次新增代码中的非白名单字面量，各自命名成了什么、定义在哪。
-5. **验证**：实际执行的命令与输出，不写「已验证」。
-6. **剩余风险**：未处理的边界。
+Answer each item individually. If none apply, write "None". Do not omit any item:
 
-跑完验证再报告。写了 200 行而它本可以是 50 行，重写它。
+1. **Symbols invalidated by this change**: List every deleted import / function / branch / configuration item.
+2. **Failure paths**: Which ones were handled; what context the error messages include.
+3. **IO / queries inside loops**: Yes / No, and on which line.
+4. **Raw literals**: For every non-whitelisted literal introduced by this change, state what it was named and where it is defined.
+5. **Verification**: The commands actually executed and their outputs. Do not write merely "verified."
+6. **Remaining risks**: Unhandled edge cases.
 
-## 审查模式
+Run verification before reporting. If you wrote 200 lines for something that could have been done in 50, rewrite it.
 
-审查或重构时，除功能正确性外重点看：
+## Review Mode
 
-- 该用结构的地方是否在堆分支（对照 `references/patterns.md`）。
-- 失败路径是否遗漏；错误信息是否足以定位问题。
-- 循环内是否藏着逐条 IO / 查询。
-- 是否存在裸字面量、重复声明的真相源、本该是枚举的散装常量。
-- 是否存在无调用方的死代码。
-- 哪些抽象、参数、状态、分支可以删除。
+During code review or refactoring, in addition to functional correctness, focus on:
+
+- Whether places that should use a proper structure are instead piling up branches (compare against `references/patterns.md`).
+- Whether any failure paths are missing; whether error messages contain enough information to locate the problem.
+- Whether per-item IO / queries are hidden inside loops.
+- Whether there are raw literals, duplicated sources of truth, or scattered constants that should be enums.
+- Whether there is dead code with no callers.
+- Which abstractions, parameters, states, and branches can be removed.

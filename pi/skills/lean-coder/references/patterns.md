@@ -1,46 +1,47 @@
-# 信号 → 结构 映射表
+# Signal → Structure Mapping Table
 
-抽象由**代码里可观测的信号**触发，不由「以后可能用到」触发。
-未出现信号 → 直接写最直白的实现，不要套模式。
+Abstractions are triggered by **observable signals in the code**, not by “we might need this someday.”
 
-判定顺序：先确认信号成立 → 再选结构 → 若成本明显高于收益，说明理由后仍可直写。
+No signal → write the most straightforward implementation directly; do not force a pattern onto it.
+
+Decision order: first confirm that the signal exists → then choose the structure → if the cost is clearly greater than the benefit, explain why and still use the straightforward implementation.
 
 ---
 
-## 1. 多个分支在判同一个类型 / 枚举 / 字符串标签
+## 1. Multiple branches are checking the same type / enum / string tag
 
-**信号**：3 个以上分支的判据是同一个变量的取值；新增一种取值就要再加一个分支；同样的分支组合在多处重复出现。
+**Signal**: Three or more branches make decisions based on the value of the same variable; adding a new value requires adding another branch; the same combination of branches appears repeatedly in multiple places.
 
-**采用**：查表分发（映射：取值 → 处理函数）或多态派发。
+**Use**: Table-driven dispatch (mapping: value → handler function) or polymorphic dispatch.
 
-**理由**：新增取值只需注册一条，不必回到每个分支点补写；漏改某一处的可能性被结构消除。
+**Why**: Adding a new value only requires registering one entry instead of revisiting every branching point. The structure eliminates the possibility of forgetting to update one of the branches.
 
 ```python
-# 反例：新增一种类型要改 N 处
+# Bad: adding a new type requires modifying N places
 if kind == "a": return handle_a(x)
 elif kind == "b": return handle_b(x)
 elif kind == "c": return handle_c(x)
 ...
 
-# 正例
+# Good
 HANDLERS = {"a": handle_a, "b": handle_b, "c": handle_c}
 handler = HANDLERS.get(kind)
 if handler is None:
-    raise ValueError(f"未知类型 {kind!r}，已支持：{sorted(HANDLERS)}")
+    raise ValueError(f"Unknown type {kind!r}; supported types: {sorted(HANDLERS)}")
 return handler(x)
 ```
 
-**不适用**：分支只有两三个且逻辑各不相同、取值集合稳定不会增长 —— 直写更清楚。
+**Not applicable**: There are only two or three branches, each with substantially different logic, and the value set is stable and unlikely to grow — writing the branches directly is clearer.
 
 ---
 
-## 2. 对象存在「当前处于哪个阶段」且阶段间转换有规则
+## 2. An object has a “current stage,” and transitions between stages follow rules
 
-**信号**：用多个布尔位表示阶段（`is_started` / `is_paused` / `is_done` 同时存在）；代码里出现「只有在 X 之后才能做 Y」的注释或校验；非法顺序调用会导致数据错乱。
+**Signal**: Multiple boolean flags are used to represent stages (`is_started` / `is_paused` / `is_done` coexist); the code contains comments or validations such as “Y can only be performed after X”; calling operations in an invalid order can corrupt data.
 
-**采用**：显式状态字段 + 合法转换表，转换入口唯一，非法转换直接拒绝并报错。
+**Use**: An explicit state field + a valid transition table. Provide a single transition entry point, and reject invalid transitions immediately with an error.
 
-**理由**：布尔位组合会产生无意义的状态（既 paused 又 done），而合法转换表把不可能状态从类型层面排除。
+**Why**: Boolean combinations can produce meaningless states (for example, both `paused` and `done`), while a valid transition table eliminates impossible states structurally.
 
 ```python
 TRANSITIONS = {
@@ -55,23 +56,23 @@ def transition(self, target: str) -> None:
     allowed = TRANSITIONS[self.state]
     if target not in allowed:
         raise IllegalTransition(
-            f"任务 {self.task_id} 不能从 {self.state} 转到 {target}，"
-            f"当前允许：{sorted(allowed) or '无（终态）'}"
+            f"Task {self.task_id} cannot transition from {self.state} to {target}; "
+            f"currently allowed: {sorted(allowed) or 'none (terminal state)'}"
         )
     self.state = target
 ```
 
-**不适用**：只有两个状态且无非法顺序（如 open/closed）—— 一个布尔字段足够。
+**Not applicable**: There are only two states and no invalid transition order (such as open/closed) — a single boolean field is sufficient.
 
 ---
 
-## 3. 全局唯一的资源被重复创建
+## 3. A globally unique resource is being created repeatedly
 
-**信号**：配置、连接池、HTTP 客户端、日志器、模型/驱动实例在多个模块各自 `new` 一次；同一份配置文件被读取多次；不同模块拿到的实例不一致导致行为不一致。
+**Signal**: Configuration objects, connection pools, HTTP clients, loggers, model/driver instances, etc. are independently `new`ed in multiple modules; the same configuration file is read multiple times; different modules receive different instances and therefore behave inconsistently.
 
-**采用**：单一实例（模块级单例或依赖注入的单一持有者），初始化处理并发竞态，提供显式的重载/关闭入口。
+**Use**: A single instance (a module-level singleton or a single owner managed through dependency injection). Initialization must handle concurrency races, and explicit reload/shutdown entry points should be provided.
 
-**理由**：一个应用应共用一份配置与一个连接池；重复创建会带来状态漂移、连接泄漏和重复 IO 开销。
+**Why**: An application should share one configuration instance and one connection pool. Repeated creation causes state drift, connection leaks, and redundant I/O overhead.
 
 ```python
 _config: Config | None = None
@@ -81,27 +82,28 @@ def get_config() -> Config:
     global _config
     if _config is None:
         with _lock:
-            if _config is None:                 # 双检，避免并发下重复加载
+            if _config is None:                 # Double-check to avoid duplicate loading under concurrency
                 _config = Config.load(CONFIG_PATH)
     return _config
 ```
 
-要点：
-- 初始化必须线程安全（或使用语言提供的惰性单次初始化设施）。
-- 不要把单例做成什么都往里塞的全局容器 —— 单例的是**资源**，不是杂物袋。
-- 有测试需求时提供重置入口，否则测试之间会相互污染。
+Key points:
 
-**不适用**：实例本身持有请求级状态（如某次请求的上下文）—— 那必须是每次新建。
+- Initialization must be thread-safe (or use the language's built-in lazy one-time initialization mechanism).
+- Do not turn the singleton into a global container that holds everything — the singleton should represent a **resource**, not a junk drawer.
+- If testing requires it, provide a reset entry point; otherwise tests may contaminate one another.
+
+**Not applicable**: The instance itself contains request-scoped state (such as the context of a specific request) — in that case, a new instance must be created for each request.
 
 ---
 
-## 4. 多处函数共享相同的前置 / 后置步骤
+## 4. Multiple functions share the same pre-processing / post-processing steps
 
-**信号**：多个函数开头都在做同样的鉴权、参数校验、开事务、计时、写审计日志；结尾都在做同样的关闭、提交/回滚、埋点；这些步骤被复制粘贴且已经出现过不同步修改。
+**Signal**: Multiple functions begin with the same authentication, parameter validation, transaction setup, timing, or audit logging; they end with the same close, commit/rollback, or instrumentation steps; these steps have been copied and pasted and have already started drifting out of sync.
 
-**采用**：装饰器 / 中间件 / 上下文管理器 / 模板方法，把公共步骤收敛到一处。
+**Use**: Decorators / middleware / context managers / template methods to consolidate the common steps in one place.
 
-**理由**：复制的前后置步骤必然逐渐不同步，出错时表现为「某几个接口漏了审计日志」这类难查问题。
+**Why**: Copied pre/post-processing logic will inevitably drift over time. Failures then appear as difficult-to-diagnose issues such as “a few endpoints are missing audit logs.”
 
 ```python
 @contextmanager
@@ -111,35 +113,35 @@ def transaction(conn):
         conn.commit()
     except Exception:
         conn.rollback()
-        raise                                    # 保留原始异常与堆栈
+        raise                                    # Preserve the original exception and stack trace
 ```
 
-**不适用**：只有一个调用点；或各处的"相似"步骤其实语义不同 —— 强行合并会产生一堆开关参数。
+**Not applicable**: There is only one call site, or the supposedly “similar” steps actually have different semantics — forcing them together will only create a pile of configuration flags.
 
 ---
 
-## 5. 构造对象需要一长串参数或多种组合
+## 5. Constructing an object requires a long parameter list or many parameter combinations
 
-**信号**：构造函数超过 5 个参数且多数有默认值；调用点出现大量 `None` 占位；存在几种固定的参数组合被反复拼装。
+**Signal**: The constructor has more than five parameters and most of them have default values; call sites contain many `None` placeholders; several fixed parameter combinations are repeatedly assembled.
 
-**采用**：参数对象 / 具名配置结构；固定组合提供工厂函数。
+**Use**: A parameter object / named configuration structure; provide factory functions for commonly used fixed combinations.
 
-**不适用**：参数少、含义明确 —— 直接传参最清楚，不要为三个参数造一个 Builder。
-
----
-
-## 6. 同一份数据被多个观察方需要
-
-**信号**：某处状态变更后需要通知 N 个互不相关的下游；用一长串直接调用把下游写死在变更点；新增下游要修改变更点代码。
-
-**采用**：事件/回调注册，变更点只发布，不关心订阅者。
-
-**不适用**：下游固定只有一两个且长期不变 —— 直接调用更易追踪，事件机制会让调用链变得难以静态追溯。
+**Not applicable**: There are only a few parameters and their meanings are clear — passing them directly is the clearest approach. Do not create a Builder just for three parameters.
 
 ---
 
-## 通用禁令
+## 6. The same data is needed by multiple observers
 
-- 不要为了"用上模式"而引入模式：信号不成立时，直白代码就是最优解。
-- 不要一次叠加多个模式（工厂 + 策略 + 观察者三件套）来解决一个小问题。
-- 引入任何结构时，在落点声明里写清触发它的信号是什么。
+**Signal**: A state change needs to notify N unrelated downstream consumers; a long sequence of direct calls hard-codes those consumers into the mutation point; adding a new downstream consumer requires modifying the mutation-point code.
+
+**Use**: Event/callback registration. The mutation point only publishes the event and does not care about the subscribers.
+
+**Not applicable**: There are only one or two fixed downstream consumers and they are unlikely to change — direct calls are easier to trace. An event mechanism would make the call chain harder to follow statically.
+
+---
+
+## General Prohibitions
+
+- Do not introduce a pattern just for the sake of “using a pattern”: when the signal does not exist, straightforward code is the optimal solution.
+- Do not stack multiple patterns at once (for example, Factory + Strategy + Observer) to solve a small problem.
+- Whenever introducing a structure, clearly state in the placement rationale which signal triggered it.
