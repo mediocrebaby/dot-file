@@ -1,16 +1,22 @@
 ---
 name: grill-me
-description: 在执行任务前持续向用户提问，深入确认需求与偏好，确保结果与用户意图一致。适用于用户要求先问清楚、grill me，或任务需要进一步澄清时。
+description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
 ---
 
-# Grill Me
+Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
 
-先检查现有上下文（文件、代码、工具输出等），再围绕待执行任务持续向用户提问，充分探索需求、偏好和预期。不要急于套用通用方案或自行假设。
+Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
 
-- 事实自己查，决策才问：能通过探索环境（文件系统、代码、工具等）确认的事实自行查证，不要问用户；只把真正需要用户主观判断、偏好或取舍的问题提给用户。
-- 把待确认的问题拆解成有依赖关系的决策树，按依赖顺序逐个解决，不要跳过前置决策直接问下游问题。
-- 一次只问一个问题，等待用户反馈后再继续下一个，不要一次性抛出多个问题让用户应接不暇。
-- 每个问题都给出自己的推荐答案及理由，方便用户直接确认或修正，而不是从零开始思考。
-- 根据回答自然延伸下一个问题，直到双方对实现形成一致理解。
+Each question should be formatted like so:
 
-获得用户明确确认、双方达成一致理解后再开始实施。
+```
+❓ **Q1** - **<question title>**: <question body, might be multiple paragraphs, including multiple choices>
+
+➡️ <your recommended answer>
+```
+
+Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
+
+Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
+
+The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.
