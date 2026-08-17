@@ -1,61 +1,62 @@
-# 逆向分析报告：<目标名称>
+# Reverse Engineering Analysis Report: <Target Name>
 
-## 1. 目标与授权
+## 1. Target and Authorization
 
-- **目标**：<文件名 / 版本 / 架构，如 libfoo.so v1.2 arm64>
-- **哈希**：<sha256>
-- **授权来源**：<CTF / 自有系统 / 授权渗透测试编号 / 学习研究>
-- **分析范围**：<要还原的具体功能，如"签名参数 X-Sign 的生成算法">
+- **Target**: <filename / version / architecture, e.g. libfoo.so v1.2 arm64>
+- **Hash**: <sha256>
+- **Authorization Source**: <CTF / owned system / authorized penetration-test ID / educational research>
+- **Analysis Scope**: <specific functionality to recover, e.g. "generation algorithm for the X-Sign signature parameter">
 
-## 2. 黑盒观测
+## 2. Black-Box Observation
 
-### I/O 面
-- 输入：<来源与格式>
-- 输出：<去向与格式>
+### I/O Surface
+- Input: <source and format>
+- Output: <destination and format>
 
-### 行为特征（由差异化语料得出的假设）
-| 探针输入 | 观察到的输出行为 | 推断 |
+### Behavioral Characteristics (Hypotheses Derived from Differentiated Samples)
+| Probe Input | Observed Output Behavior | Inference |
 |---|---|---|
-| <如 全零 × 16> | <输出周期性/长度/雪崩> | <如 块大小 16B，分组密码> |
+| <e.g. all-zero × 16> | <periodicity / length / avalanche behavior> | <e.g. 16-byte block size, block cipher> |
 
-### oracle 语料
-- 向量文件：`oracle.json`（<N> 条）
-- 覆盖：空 / 单字节 / 跨块 / 极长 / 全零全 FF
+### Oracle Corpus
+- Vector file: `oracle.json` (<N> entries)
+- Coverage: empty / single-byte / cross-block / very long / all-zero / all-FF
 
-## 3. 靶区定位
+## 3. Target Localization
 
-- 交接手法：<常量指纹 / API 断点回溯 / 数据回溯>
-- 锁定函数：
-  | 符号 / 偏移 | 推断职责 |
+- Handoff Technique: <constant fingerprinting / API breakpoint backtrace / data-flow backtracking>
+- Identified Functions:
+
+  | Symbol / Offset | Inferred Responsibility |
   |---|---|
-  | <sub_1234 / +0x1234> | <核心变换> |
+  | <sub_1234 / +0x1234> | <core transformation> |
 
-## 4. 白盒还原
+## 4. White-Box Recovery
 
-### 算法识别
-- 骨架：<标准算法名或"自研">
-- 被改参数：<初值 / S-box / 轮数 / 常量 / 字节序>
+### Algorithm Identification
+- Structure: <standard algorithm name or "custom">
+- Modified Parameters: <initial values / S-box / round count / constants / byte order>
 
-### 伪代码
+### Pseudocode
+```text
+<recovered readable pseudocode>
 ```
-<还原出的可读伪代码>
-```
 
-## 5. 重实现
+## 5. Reimplementation
 
-- 语言/文件：<my_reimpl.py>
-- 关键实现要点：<字节序、循环边界、终末变换等易错处>
+- Language/File: <my_reimpl.py>
+- Key Implementation Details: <endianness, loop boundaries, final transformation, and other error-prone details>
 
 ```python
-<核心重实现代码>
+<core reimplementation code>
 ```
 
-## 6. 验证结果
+## 6. Validation Results
 
-- 命令：`verify_reimpl.py --reimpl '<...>' --oracle oracle.json`
-- 结果：**<N>/<N> 向量匹配（100%）** ✅  / 或列出遗留 MISMATCH 与原因
-- 遗留风险 / 未覆盖分支：<如有>
+- Command: `verify_reimpl.py --reimpl '<...>' --oracle oracle.json`
+- Result: **<N>/<N> vectors matched (100%)** ✅ / or list remaining MISMATCH cases and their causes
+- Remaining Risks / Uncovered Branches: <if any>
 
-## 7. 落地形态
+## 7. Delivery Format
 
-- <可对接客户端/SDK 路径 与调用示例> 或 <本报告即交付物>
+- <interoperable client/SDK path and usage example> or <this report itself is the deliverable>

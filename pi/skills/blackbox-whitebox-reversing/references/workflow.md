@@ -1,86 +1,86 @@
-# 逆向流程细化手法
+# Detailed Reverse Engineering Techniques
 
-各阶段的可操作细节。SKILL.md 给的是骨架，这里是遇到真实目标、或某一步卡住时查的具体招式。
+Operational details for each stage. `SKILL.md` provides the skeleton; this document contains the concrete techniques to consult when working on a real target or when a specific step gets stuck.
 
-## 目录
+## Table of Contents
 
-- [黑盒语料构造策略](#黑盒语料构造策略)
-- [动态观测清单](#动态观测清单)
-- [黑盒→白盒交接](#黑盒白盒交接)
-- [常见"自研算法"识别](#常见自研算法识别)
-- [验证分歧归因表](#验证分歧归因表)
-- [收敛与停止判据](#收敛与停止判据)
+- [Black-Box Corpus Construction Strategy](#black-box-corpus-construction-strategy)
+- [Dynamic Observation Checklist](#dynamic-observation-checklist)
+- [Black-Box → White-Box Handoff](#black-box--white-box-handoff)
+- [Identifying Common "Custom Algorithms"](#identifying-common-custom-algorithms)
+- [Validation Mismatch Attribution Table](#validation-mismatch-attribution-table)
+- [Convergence and Stopping Criteria](#convergence-and-stopping-criteria)
 
-## 黑盒语料构造策略
+## Black-Box Corpus Construction Strategy
 
-好的语料不是随机堆样本，而是每个样本都在**证伪一个关于算法的假设**。按维度设计：
+A good corpus is not a random pile of samples. Each sample should **falsify a specific hypothesis about the algorithm**. Design samples by dimension:
 
-| 想验证的性质 | 构造的输入对 | 从输出看什么 |
+| Property to Verify | Constructed Input Pair | What to Observe in the Output |
 |---|---|---|
-| 输出长度是否随输入长度变 | 长度 0/1/15/16/17/31/32 | 输出长度曲线，是否在 8/16 字节处跳变（分组密码块大小） |
-| 是否位置相关 | `AAAA` vs `ABAA`（改一处） | 只有对应位置变，还是全变（扩散/雪崩） |
-| 是否有轮/分组结构 | 全 `\x00` × N | 输出是否呈周期性（暴露块边界、密钥流周期） |
-| 是否含长度/计数字段 | 递增长度 | 输出头部某字节是否等于/线性于长度 |
-| 是否有校验尾 | 同长不同内容 | 尾部固定长度区随内容变（CRC/MAC 特征） |
-| 编码 vs 加密 | 同输入跑两次 | 输出是否一致（确定性）；不一致则含随机盐/IV/时间 |
-| 字节序 | `\x01\x00\x00\x00` vs `\x00\x00\x00\x01` | 哪种被当作数值 1 处理 |
+| Whether output length changes with input length | Lengths 0/1/15/16/17/31/32 | Output-length curve; whether it jumps at 8/16-byte boundaries (block-cipher block size) |
+| Whether behavior is position-dependent | `AAAA` vs `ABAA` (change one position) | Whether only the corresponding position changes or everything changes (diffusion/avalanche) |
+| Whether there is a round/block structure | All `\x00` × N | Whether the output shows periodicity (revealing block boundaries or keystream period) |
+| Whether length/count fields are present | Increasing input lengths | Whether a byte in the output header equals or changes linearly with the length |
+| Whether there is a checksum trailer | Same length, different content | Whether a fixed-length region at the tail changes with the content (CRC/MAC characteristics) |
+| Encoding vs. encryption | Run the same input twice | Whether the outputs are identical (determinism); if not, random salt/IV/time may be involved |
+| Endianness | `\x01\x00\x00\x00` vs `\x00\x00\x00\x01` | Which one is interpreted as numeric value 1 |
 
-要点：**先用最小差异输入定位敏感字节**，再放大到边界/极端输入。全零、全 FF、单字节递增（`00 01 02 ...`）是三组信息量最高的探针。
+Key point: **first use minimally different inputs to locate sensitive bytes**, then expand to boundary/extreme inputs. All-zero, all-FF, and single-byte incrementing sequences (`00 01 02 ...`) are three of the highest-information probes.
 
-## 动态观测清单
+## Dynamic Observation Checklist
 
-拿到一个整程序目标，按此顺序动态摸一遍，产出"关键代码在哪"的线索：
+When you receive a whole-program target, perform a quick dynamic pass in this order to produce clues about "where the critical code is":
 
-1. **文件与保护**：`file`、`checksec`（Linux）看架构、是否加壳、PIE/NX/Canary——决定后续基址与 hook 策略。
-2. **库调用轨迹**：`ltrace`（库函数）+ `strace`（系统调用）跑一遍带代表性输入的执行，看它调了 `memcpy`/`malloc`/加密库/文件/网络 API——这些是回溯业务函数的锚点。
-3. **字符串**：`strings -a` 抓错误信息、格式串、magic、路径、算法名（"aes"、"md5"、版本串）——直接给静态交叉引用当锚。
-4. **导入表**：`objdump -T` / `nm -D`（Linux）、`otool -L`（macOS）看依赖了哪些加密/编码库——若链接了 OpenSSL/mbedTLS，"自研加密"多半只是包装。
-5. **断点回溯**：在上述锚点 API 下断，命中时回溯调用栈（`bt`），最靠近用户输入的那层业务函数就是靶区。
-6. **执行地址采样**：调试器记录关键路径命中的地址，减去运行时基址得静态偏移，喂给反编译器。
+1. **File and protection properties**: use `file` and `checksec` (Linux) to inspect architecture, packing, PIE/NX/Canary — these determine later base-address and hook strategies.
+2. **Library/system-call traces**: run `ltrace` (library calls) + `strace` (system calls) once with representative input and inspect calls to `memcpy`/`malloc`/cryptographic libraries/file/network APIs — these are anchors for backtracking into business logic.
+3. **Strings**: use `strings -a` to extract error messages, format strings, magic values, paths, algorithm names (`"aes"`, `"md5"`, version strings) — these become direct anchors for static cross-references.
+4. **Import/dependency tables**: use `objdump -T` / `nm -D` (Linux), `otool -L` (macOS) to inspect which cryptographic/encoding libraries are linked — if OpenSSL/mbedTLS is present, the "custom encryption" is often just a wrapper.
+5. **Breakpoint backtracing**: set breakpoints on the anchor APIs above, and when hit, backtrace the call stack (`bt`). The business-logic layer closest to user-controlled input is the target area.
+6. **Execution-address sampling**: record addresses hit on critical paths in the debugger, subtract the runtime module base to get static offsets, and feed those offsets into the decompiler.
 
-Frida 适合做函数级 I/O 抓取（参数、返回值、内存），具体模板见 `binary-tooling.md`。
+Frida is well suited for function-level I/O capture (arguments, return values, memory). See `binary-tooling.md` for concrete templates.
 
-## 黑盒→白盒交接
+## Black-Box → White-Box Handoff
 
-这是流程的枢纽——把"看到的行为"钉到"具体的代码地址"。分两层：先把范围收敛到**哪个文件**，再收敛到**哪个函数**。
+This is the pivot of the workflow — pinning "observed behavior" to "specific code addresses." Do it in two layers: first converge on **which file**, then on **which function**.
 
-**文件级（该拉进 IDA 的是哪个）**：目标是一堆二进制时，用 `scripts/triage_targets.py` 扫描候选目录，把黑盒观测到的字符串/常量作为 `--needle`/`--hex-needle` 传入——含线索的文件几乎必然是靶文件。脚本按"黑盒线索命中 > 加密信号 > 格式/大小"排序，并给出首选。动态侧的佐证：`/proc/<pid>/maps` 看实际加载了哪些模块、命中地址落在哪个模块的地址区间、`ltrace` 里目标函数属于哪个库、Frida `Process.enumerateModules()`。静态排序与动态命中互相印证，两者一致时基本可定文件。
+**File level (which binary should be loaded into IDA)**: when the target contains many binaries, use `scripts/triage_targets.py` to scan the candidate directory and pass strings/constants observed during black-box analysis via `--needle`/`--hex-needle`. A file containing those clues is almost certainly the target binary. The script ranks candidates by "black-box clue hit > cryptographic signals > format/size" and provides a first choice. Dynamic corroboration includes: using `/proc/<pid>/maps` to see which modules are actually loaded, checking which module address range contains a hit address, identifying which library owns the target function in `ltrace`, and inspecting Frida `Process.enumerateModules()`. Static ranking and dynamic hits should corroborate each other; when both agree, the target file is essentially confirmed.
 
-**函数级（该文件里的哪个函数）**：三条主路：
+**Function level (which function inside that file)**: there are three main paths:
 
-- **常量指纹回溯**：黑盒/内存里出现的魔术常量在静态里交叉引用。高价值常量：`0x67452301`/`0xEFCDAB89`（MD5/SHA1 初值）、`0x9E3779B9`（TEA delta）、`0xEDB88320`（CRC32 反射多项式）、`0x63`... 开头的 AES S-box、`0x811C9DC5`（FNV）。识别到常量基本就锁定了算法与函数。
-- **数据回溯（污点思路）**：在输出产生点（`write`/`send`/返回缓冲区）下断，反向看这块缓冲区是被哪个函数写的、其输入又来自哪——沿数据流回溯到变换函数。
-- **偏移对照**：动态命中地址 − 模块基址 = 静态偏移；PIE/ASLR 下每次基址不同，务必用同一次运行的基址换算。
+- **Constant-fingerprint backtracking**: cross-reference magic constants observed during black-box analysis or memory inspection in the static view. High-value constants include `0x67452301`/`0xEFCDAB89` (MD5/SHA1 initial values), `0x9E3779B9` (TEA delta), `0xEDB88320` (CRC32 reflected polynomial), AES S-box sequences beginning with `0x63`..., and `0x811C9DC5` (FNV). Recognizing one of these often identifies both the algorithm and the function.
+- **Data backtracking (taint-style reasoning)**: set breakpoints at output-production points (`write`/`send`/return buffer), trace backward to determine which function wrote the buffer and where its input came from, then follow the data flow back to the transformation function.
+- **Offset mapping**: dynamic hit address − module base address = static offset. Under PIE/ASLR, the base address changes between runs, so always use the base address from the same execution.
 
-交接产物：一张 `{符号名或偏移 → 猜测职责}` 的小清单，只把清单里的函数拉进第 3 步白盒，其余不碰。
+Handoff output: a small list in the form `{symbol name or offset → suspected responsibility}`. Only functions on this list should enter Step 3 white-box analysis; leave the rest alone.
 
-## 常见"自研算法"识别
+## Identifying Common "Custom Algorithms"
 
-绝大多数看似私有的变换是标准算法换皮。还原前先证伪"这是标准算法"这个廉价假设：
+Most apparently proprietary transformations are standard algorithms in disguise. Before recovery, first try to falsify the cheap hypothesis "this is a standard algorithm":
 
-- **分组密码**：块大小 8B → 可能 DES/TEA/XTEA/Blowfish；16B → AES/SM4/Camellia。看是否有 S-box 表、轮循环。
-- **流密码 / 简单混淆**：逐字节且位置相关、密钥流可预测 → RC4（有 256 字节 KSA 洗牌）、或 XOR 滚动密钥。
-- **哈希/校验**：定长输出且雪崩强 → MD5(16B)/SHA1(20B)/SHA256(32B)；短且线性 → CRC(有多项式表)/Adler/FNV。
-- **编码**：可逆、长度按比例膨胀 → Base64/32/85、变长整数、protobuf-like TLV。
-- **换皮改动**：最常见的是"标准算法 + 改了常量/S-box/初值/轮数/字节序"。识别出骨架后，白盒只需确认这几个被改的参数，还原成本骤降。
+- **Block ciphers**: 8-byte blocks → possibly DES/TEA/XTEA/Blowfish; 16-byte blocks → AES/SM4/Camellia. Look for S-box tables and round loops.
+- **Stream ciphers / simple obfuscation**: byte-by-byte, position-dependent, predictable keystream → possibly RC4 (with a 256-byte KSA permutation) or a rolling XOR key.
+- **Hashes/checksums**: fixed-length output with strong avalanche → MD5 (16B) / SHA1 (20B) / SHA256 (32B); short and linear → CRC (with polynomial table) / Adler / FNV.
+- **Encoding**: reversible, with proportional length expansion → Base64/32/85, variable-length integers, protobuf-like TLV.
+- **Disguised modifications**: the most common pattern is "standard algorithm + modified constants/S-box/initial values/round count/endianness." Once the skeleton is identified, white-box work only needs to confirm those changed parameters, drastically reducing recovery cost.
 
-## 验证分歧归因表
+## Validation Mismatch Attribution Table
 
-`verify_reimpl.py` 报 MISMATCH 时，按首个分歧位置与模式对号入座：
+When `verify_reimpl.py` reports a `MISMATCH`, map the first differing position and pattern to likely causes:
 
-| 现象 | 大概率病因 |
+| Symptom | Most Likely Cause |
 |---|---|
-| 从第 0 字节就全错，但长度对 | 初值/密钥/常量错，或整体字节序反了 |
-| 前若干字节对，某块之后开始错 | 分组边界/块大小错、轮数差一、padding 处理不同 |
-| 每隔固定间隔错一个 | 查表索引偏移、位置计数器差一（off-by-one） |
-| 只有最后几字节错 | 漏了终末变换（final round / 输出置换 / 加校验尾） |
-| 大端小端整批颠倒 | 多字节读写字节序反了 |
-| 数值偏差恒定（如都差 1） | 漏了 `+1`/`-1`/进位/模数 |
-| 高位字节错、低位对 | 符号扩展 vs 零扩展、`char` 有无符号 |
-| 短输入全对，长输入才错 | 缓冲/分组的溢出处理、长度字段截断——回第 1 步补长语料 |
+| Everything is wrong from byte 0, but length matches | Wrong initial value/key/constants, or overall endianness reversed |
+| First few bytes match, then diverges after a block boundary | Wrong block boundary/block size, off-by-one round count, different padding handling |
+| One byte is wrong at a fixed interval | Lookup-table index offset, position counter off by one |
+| Only the final few bytes are wrong | Missing final transformation (final round / output permutation / checksum trailer) |
+| Multi-byte values are reversed in batches | Multi-byte read/write endianness reversed |
+| Numeric difference is constant (e.g. always off by 1) | Missing `+1`/`-1`/carry/modulus |
+| High bytes are wrong while low bytes match | Sign extension vs zero extension, signed vs unsigned `char` |
+| Short inputs all match, long inputs fail | Buffer/block overflow handling or length-field truncation — return to Step 1 and add long-input samples |
 
-## 收敛与停止判据
+## Convergence and Stopping Criteria
 
-- **落地判据**：全部 oracle 向量字节级匹配，且语料已覆盖边界（空/单字节/跨块/极长）。差一个都不算。
-- **止损判据**：若某函数反复还原都无法对齐，重新质疑第 2 步的靶区是否找错（可能真正的变换在别处，或有运行期解密的代码）；回到动态观测确认执行路径，而不是在错的函数上死磕。
-- **语料够不够**：若重实现能通过现有全部向量，但你对某个未测分支没把握，就补一个专打该分支的输入再验证——通过才敢下"等价"的结论。
+- **Delivery criterion**: every oracle vector must match byte-for-byte, and the corpus must cover boundary cases (empty / single-byte / cross-block / very long). One mismatch means it is not done.
+- **Stop-loss criterion**: if repeated attempts to recover a function still cannot produce matching output, question whether Step 2 identified the correct target area. The real transformation may be elsewhere, or the code itself may be decrypted at runtime. Return to dynamic observation and confirm the execution path instead of grinding indefinitely on the wrong function.
+- **Is the corpus sufficient?** If the reimplementation passes every existing vector but you are uncertain about an untested branch, add an input specifically designed to hit that branch and validate again. Only after it passes should you claim the implementation is "equivalent."

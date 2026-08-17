@@ -1,58 +1,58 @@
-# 二进制逆向工具速查
+# Binary Reverse Engineering Tool Quick Reference
 
-按"目的 + 平台"选工具，不是记全所有开关。分静态（不运行，看结构）和动态（运行时，看行为）两栏。
+Choose tools by **purpose + platform**, rather than memorizing every option. The tools are grouped into two categories: static analysis (inspect structure without running the target) and dynamic analysis (observe behavior at runtime).
 
-## 目录
+## Table of Contents
 
-- [静态分析](#静态分析)
-- [动态分析](#动态分析)
-- [按平台](#按平台)
-- [Frida 函数级 IO Hook 模板](#frida-函数级-io-hook-模板)
+- [Static Analysis](#static-analysis)
+- [Dynamic Analysis](#dynamic-analysis)
+- [By Platform](#by-platform)
+- [Frida Function-Level I/O Hook Template](#frida-function-level-io-hook-template)
 
-## 静态分析
+## Static Analysis
 
-| 目的 | 工具 | 关键用法 |
+| Purpose | Tool | Key Usage |
 |---|---|---|
-| 反编译看伪代码 | Ghidra（免费）/ IDA Pro / Binary Ninja | 定位函数后看 C 伪代码；Ghidra 无头模式可脚本化批处理 |
-| 快速反汇编 / 交叉引用 | radare2 / rizin、`objdump -d` | `objdump -d --start-address=0x.. --stop-address=0x..` 只看目标函数 |
-| 抓字符串/常量做锚点 | `strings -a`、Ghidra Defined Strings | 错误信息、算法名、magic → 交叉引用回定位函数 |
-| 看头/段/符号/导入 | `readelf -a`、`nm -D`、`objdump -T`（ELF）；`otool`、`nm`（Mach-O） | 看导入的加密库判断是否标准算法包装 |
-| 常量指纹搜索 | Ghidra 脚本 / 手工 grep 反汇编 | 搜 MD5/TEA/CRC 等已知常量（见 workflow.md 交接一节） |
-| 加壳检测 | `checksec`、DIE (Detect It Easy) | 有壳先脱壳/dump 再静态 |
+| Decompile and inspect pseudocode | Ghidra (free) / IDA Pro / Binary Ninja | After locating the function, inspect C-like pseudocode; Ghidra headless mode supports scripted batch processing |
+| Quick disassembly / cross-references | radare2 / rizin, `objdump -d` | Use `objdump -d --start-address=0x.. --stop-address=0x..` to inspect only the target function |
+| Extract strings/constants as anchors | `strings -a`, Ghidra Defined Strings | Error messages, algorithm names, magic values → cross-reference back to the relevant function |
+| Inspect headers/sections/symbols/imports | `readelf -a`, `nm -D`, `objdump -T` (ELF); `otool`, `nm` (Mach-O) | Inspect imported cryptographic libraries to determine whether the target is wrapping a standard algorithm |
+| Search for constant fingerprints | Ghidra scripts / manually grep disassembly | Search for known constants from MD5/TEA/CRC and similar algorithms (see the handoff section in `workflow.md`) |
+| Detect packing/protection | `checksec`, DIE (Detect It Easy) | If packed, unpack/dump first, then perform static analysis |
 
-## 动态分析
+## Dynamic Analysis
 
-| 目的 | 工具 | 关键用法 |
+| Purpose | Tool | Key Usage |
 |---|---|---|
-| 库函数调用轨迹 | `ltrace` | 看调了哪些 `memcpy`/`strcmp`/加密库函数及参数 |
-| 系统调用轨迹 | `strace`（Linux）、`dtruss`/`dtrace`（macOS） | 看文件/网络/内存 syscall，定位 I/O 面 |
-| 断点 / 单步 / 回溯栈 | `gdb`（+pwndbg/gef）、`lldb`（macOS） | 在锚点 API 下断，`bt` 回溯到业务函数 |
-| 函数级 I/O 抓取 / hook | Frida | 抓参数、返回值、读写内存；见下方模板 |
-| 内存搜索 / dump | gdb `find`、Frida `Memory.scan` | 找密钥/密钥流/明文缓冲 |
-| 网络抓包（若走网络） | Wireshark、mitmproxy | 抓协议 I/O 作为 oracle 输入源 |
+| Trace library-function calls | `ltrace` | Observe which `memcpy`/`strcmp`/cryptographic-library functions are called and with what arguments |
+| Trace system calls | `strace` (Linux), `dtruss`/`dtrace` (macOS) | Observe file/network/memory syscalls to locate the I/O surface |
+| Breakpoints / single-step / stack backtrace | `gdb` (+pwndbg/gef), `lldb` (macOS) | Break on anchor APIs, then use `bt` to trace back into business-logic functions |
+| Function-level I/O capture / hooking | Frida | Capture arguments, return values, and memory reads/writes; see the template below |
+| Memory search / dump | gdb `find`, Frida `Memory.scan` | Locate keys/keystreams/plaintext buffers |
+| Network capture (when networking is involved) | Wireshark, mitmproxy | Capture protocol I/O as a source of oracle inputs |
 
-选择原则：**先 `ltrace`/`strace` 拿轨迹（成本最低）→ 有锚点后上调试器断点回溯 → 需要稳定抓函数 I/O 或改行为时上 Frida。**
+Selection principle: **start with `ltrace`/`strace` to obtain execution traces at the lowest cost → once anchors are available, use debugger breakpoints and stack backtracing → use Frida when you need reliable function-level I/O capture or behavior modification.**
 
-## 按平台
+## By Platform
 
-- **Linux ELF**：`file`/`checksec` → `ltrace`+`strace` → `gdb`(pwndbg) → Ghidra。基址看 `/proc/<pid>/maps`。
-- **macOS Mach-O**：`otool -L`/`nm` → `dtruss`（需关 SIP 或用可调试目标）→ `lldb` → Ghidra。注意签名/加固与 SIP 限制。
-- **Android（原生 .so）**：`frida-server` 推到设备 → Frida hook JNI 导出函数 → 需要静态时把 .so 拉出来进 Ghidra。加固 App 先脱壳/dump dex+so。
-- **Windows PE**：x64dbg / WinDbg（动态）+ IDA/Ghidra（静态）+ API Monitor（调用轨迹）。
+- **Linux ELF**: `file`/`checksec` → `ltrace`+`strace` → `gdb` (pwndbg) → Ghidra. Read the module base address from `/proc/<pid>/maps`.
+- **macOS Mach-O**: `otool -L`/`nm` → `dtruss` (requires SIP to be disabled or a debuggable target) → `lldb` → Ghidra. Be aware of code-signing, hardened runtime, and SIP restrictions.
+- **Android (native .so)**: push `frida-server` to the device → use Frida to hook exported JNI functions → pull the `.so` into Ghidra when static analysis is needed. For protected apps, unpack/dump dex+so first.
+- **Windows PE**: x64dbg / WinDbg (dynamic) + IDA/Ghidra (static) + API Monitor (call tracing).
 
-## Frida 函数级 IO Hook 模板
+## Frida Function-Level I/O Hook Template
 
-抓某个原生函数的输入→输出配对——这直接产出 oracle 语料，也验证靶区找对没。改 `MODULE`、`SYMBOL`（或偏移）、参数解读即可。
+Capture input→output pairs for a native function. This directly produces oracle samples and also confirms whether the target area has been identified correctly. Adjust `MODULE`, `SYMBOL` (or the offset), and argument interpretation as needed.
 
 ```javascript
-// 用法: frida -f <目标> -l hook.js   或   frida -n <进程名> -l hook.js
-const MODULE = "libtarget.so";      // 目标模块；主程序可用 Process.enumerateModules()[0].name
-const SYMBOL = "transform";          // 导出符号；无符号时用 base.add(0xOFFSET)
+// Usage: frida -f <target> -l hook.js   or   frida -n <process-name> -l hook.js
+const MODULE = "libtarget.so";      // Target module; for the main executable, use Process.enumerateModules()[0].name
+const SYMBOL = "transform";         // Exported symbol; if stripped, use base.add(0xOFFSET)
 
 const base = Module.getBaseAddress(MODULE);
-// 有符号:
+// With symbol:
 const addr = Module.getExportByName(MODULE, SYMBOL);
-// 无符号（改用偏移）: const addr = base.add(0x1234);
+// Without symbol (use an offset instead): const addr = base.add(0x1234);
 
 function hexdump_arg(ptr, len) {
   try { return hexdump(ptr, { length: len, ansi: false }); }
@@ -60,24 +60,25 @@ function hexdump_arg(ptr, len) {
 }
 
 Interceptor.attach(addr, {
-  // 约定该函数签名为 transform(uint8_t* in, size_t len, uint8_t* out)
+  // Assume the function signature is transform(uint8_t* in, size_t len, uint8_t* out)
   onEnter(args) {
     this.inPtr = args[0];
     this.len = args[1].toInt32();
     this.outPtr = args[2];
-    console.log(`\n[+] ${SYMBOL} 入参 len=${this.len}`);
+    console.log(`\n[+] ${SYMBOL} input len=${this.len}`);
     console.log("  input:\n" + hexdump_arg(this.inPtr, this.len));
   },
   onLeave(retval) {
-    // 输出常写在 outPtr（或返回缓冲区）；长度按实际情况取
+    // Output is often written to outPtr (or returned through a buffer); adjust the length as needed
     console.log(`  ret=${retval}`);
     console.log("  output:\n" + hexdump_arg(this.outPtr, this.len));
-    // 把 {input, output} 打成 hex 一行，可重定向进语料文件供 oracle 复用
+    // Print {input, output} as one hex-formatted line and redirect it into a corpus file for oracle reuse
   }
 });
 ```
 
-要点：
-- 函数签名未知时先只 hook `onEnter` 打印各 `args[i]` 当指针/整数两种解读，比对哪种讲得通。
-- 抓到的 `input→output` 配对就是最干净的 oracle——它绕过了程序的 I/O 包装，直击算法边界。
-- 若目标有反调试/反 Frida，可能需要 `Stalker` 或改用 gdb 硬件断点；这属于对抗场景，按授权范围决定是否深入。
+Key points:
+
+- If the function signature is unknown, initially hook only `onEnter` and print each `args[i]` interpreted both as a pointer and as an integer; determine which interpretation makes sense.
+- Captured `input→output` pairs are the cleanest possible oracle because they bypass the program's I/O wrappers and hit the algorithm boundary directly.
+- If the target includes anti-debugging or anti-Frida protections, you may need `Stalker` or gdb hardware breakpoints instead. This is an adversarial-analysis scenario, so decide whether to go deeper according to the authorized scope.
