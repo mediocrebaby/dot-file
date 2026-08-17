@@ -1,38 +1,37 @@
 ---
 name: committing-changes
-description: 通过分析git仓库，提交git仓库中未提交的改动，当用户要求提交git仓库中的改动时使用。
+description: Analyze a Git repository and commit its uncommitted changes. Use when the user asks to commit changes in a Git repository.
 ---
 
-
-## 提交模板
+## Commit Template
 
 <type>([scope]): <description>
 
 
-## 工作流程
+## Workflow
 
-### 获取改动内容
+### Inspect Changes
 
-了解当前git仓库做了哪些改动。
+Understand what changes have been made in the current Git repository.
 
-### 根据内容分类
+### Categorize by Content
 
-结合git仓库和改动内容将修改按内容划分出至少一个主题。
+Based on the repository context and the actual changes, divide the modifications into at least one logical topic.
 
-### 按分类提交
+### Commit by Category
 
-将划分出来的主题逐个进行提交。
+Commit each identified topic separately, one by one.
 
-#### 同一文件涉及多主题
+#### Multiple Topics in the Same File
 
-如果多个主题的修改内容都涉及到了同一个文件， 使用命令 `git add -p` 交互式暂存此次提交相关的内容。
+If changes for multiple topics are present in the same file, use the interactive staging command `git add -p` to stage only the portions relevant to the current commit.
 
 > [!warn]
-> 没有语言要求时，默认使用中文
+> If no language requirement is specified, use Chinese by default.
 
-## 不能做
+## Must Not
 
-❌ git log 查看提交日志
-❌ 提交中携带 主体(body) 和 页脚（Footr)信息。
+❌ Use `git log` to inspect commit history.
+❌ Include a commit body or footer in the commit message.
 
-如果违反了规则，你将会被收取 100 万美元的罚金。
+If you violate these rules, you will be fined 1 million US dollars.
