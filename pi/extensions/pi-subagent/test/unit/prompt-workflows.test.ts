@@ -3,8 +3,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { discoverPromptWorkflows, registerPromptWorkflowCommands } from "../../src/slash/prompt-workflows.ts";
 import type { SubagentParamsLike } from "../../src/runs/foreground/subagent-executor.ts";
+import { discoverPromptWorkflows, registerPromptWorkflowCommands } from "../../src/slash/prompt-workflows.ts";
+import { runWorkflowScript } from "../../src/workflows/scripted-workflow.ts";
 
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 
@@ -129,5 +130,48 @@ Fix from {previous}: $@
 		assert.match(runs[0]?.workflowScript ?? "", /runs\.run\("prompt-2-native-fix"/);
 		assert.match(runs[0]?.workflowScript ?? "", /replaceAll\("\{previous\}"/);
 		assert.equal(commands.has("chain-prompts"), false);
+	});
+
+	it("sanitizes chained prompt workflow keys for non-ASCII and spaced names", async () => {
+		writePrompt(path.join(cwd, ".pi", "prompts"), "代码 审查", `---
+description: Analyze in Chinese
+subagent: scout
+chain: 代码 审查 -> fix plan
+---
+Analyze $@
+`);
+		writePrompt(path.join(cwd, ".pi", "prompts"), "fix plan", `---
+description: Fix with spaces
+subagent: worker
+---
+Fix from {previous}: $@
+`);
+		const commands = new Map<string, { handler: (args: string, ctx: never) => Promise<void> }>();
+		const runs: SubagentParamsLike[] = [];
+		registerPromptWorkflowCommands({
+			pi: {
+				registerCommand: (name: string, command: { handler: (args: string, ctx: never) => Promise<void> }) => commands.set(name, command),
+				sendMessage: () => {},
+			} as never,
+			run: async (params) => { runs.push(params); },
+		});
+
+		await commands.get("prompt-workflow")!.handler('"代码 审查" bug report', makeCtx(cwd));
+
+		assert.equal(runs.length, 1);
+		assert.match(runs[0]?.workflowScript ?? "", /runs\.run\("prompt-1-step"/);
+		assert.match(runs[0]?.workflowScript ?? "", /runs\.run\("prompt-2-fix-plan"/);
+		const launches: string[] = [];
+		const workflowResult = await runWorkflowScript({
+			script: runs[0]?.workflowScript ?? "return null;",
+			timeoutMs: 2_000,
+			async launch(key, params) {
+				launches.push(key);
+				return { key, ok: true, output: String(params.task ?? ""), artifactPaths: [], results: [] };
+			},
+			async status(key) { return { key, ok: true, output: "ok", artifactPaths: [] }; },
+		});
+		assert.deepEqual(launches, ["prompt-1-step", "prompt-2-fix-plan"]);
+		assert.equal(workflowResult.value, "Fix from Analyze bug report: bug report");
 	});
 });

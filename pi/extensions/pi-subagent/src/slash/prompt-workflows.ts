@@ -29,6 +29,10 @@ const RESERVED_COMMAND_NAMES = new Set([
 	"run-chain",
 	"subagents-doctor",
 ]);
+const DIACRITIC_MARK_PATTERN = /[\u0300-\u036f]/g;
+const PROMPT_WORKFLOW_KEY_TOKEN_PATTERN = /[A-Za-z0-9._-]+/g;
+const PROMPT_WORKFLOW_KEY_FALLBACK_SUFFIX = "step";
+const PROMPT_WORKFLOW_KEY_MAX_LENGTH = 128;
 
 function promptDirs(cwd: string): string[] {
 	return [
@@ -217,6 +221,14 @@ function workflowParams(workflow: PromptWorkflow, args: string[], runtime: Retur
 	};
 }
 
+function promptWorkflowRunKey(index: number, workflowName: string): string {
+	const prefix = `prompt-${index + 1}-`;
+	const maxSuffixLength = PROMPT_WORKFLOW_KEY_MAX_LENGTH - prefix.length;
+	const normalizedName = workflowName.normalize("NFKD").replace(DIACRITIC_MARK_PATTERN, "");
+	const suffix = (normalizedName.match(PROMPT_WORKFLOW_KEY_TOKEN_PATTERN) ?? []).join("-").slice(0, maxSuffixLength);
+	return `${prefix}${suffix || PROMPT_WORKFLOW_KEY_FALLBACK_SUFFIX}`;
+}
+
 function promptWorkflowScript(workflows: PromptWorkflow[], args: string[], runtime: ReturnType<typeof parseRuntimeOptions>): string {
 	const launches = workflows.map((workflow, index) => {
 		const params = workflowParams(workflow, args, runtime);
@@ -229,7 +241,7 @@ function promptWorkflowScript(workflows: PromptWorkflow[], args: string[], runti
 			...(params.cwd ? { cwd: params.cwd } : {}),
 			...(params.context ? { context: params.context } : {}),
 		};
-		return `const step${index} = await runs.run(${JSON.stringify(`prompt-${index + 1}-${workflow.name}`)}, { ...${JSON.stringify(child)}, task: ${JSON.stringify(task)}.replaceAll("{previous}", previous) });\nprevious = step${index}.output;`;
+		return `const step${index} = await runs.run(${JSON.stringify(promptWorkflowRunKey(index, workflow.name))}, { ...${JSON.stringify(child)}, task: ${JSON.stringify(task)}.replaceAll("{previous}", previous) });\nprevious = step${index}.output;`;
 	});
 	return `let previous = "";\n${launches.join("\n")}\nreturn previous;`;
 }

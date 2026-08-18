@@ -1,11 +1,12 @@
 import { Worker } from "node:worker_threads";
 
 const KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+const WORKFLOW_WORKER_OPTIONS = { eval: true, type: "module" } as const;
 
 const WORKER_SOURCE = String.raw`
-const { parentPort } = require("node:worker_threads");
-const vm = require("node:vm");
-const { inspect } = require("node:util");
+import { parentPort } from "node:worker_threads";
+import * as vm from "node:vm";
+import { inspect } from "node:util";
 
 let nextCallId = 0;
 const pending = new Map();
@@ -263,7 +264,7 @@ export async function runWorkflowScript(options: RunWorkflowScriptOptions): Prom
 	if (!options.script.trim()) throw new Error("workflowScript must not be empty.");
 	if (!Number.isInteger(options.timeoutMs) || options.timeoutMs < 1) throw new Error("workflow script timeout must be a positive integer.");
 
-	const worker = new Worker(WORKER_SOURCE, { eval: true });
+	const worker = new Worker(WORKER_SOURCE, WORKFLOW_WORKER_OPTIONS);
 	const emits: unknown[] = [];
 	const consoleEntries: WorkflowScriptResult["console"] = [];
 	const trace: WorkflowScriptTraceEntry[] = [];

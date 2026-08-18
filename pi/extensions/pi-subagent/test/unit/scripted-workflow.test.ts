@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import path from "node:path";
 import { describe, it } from "node:test";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { formatWorkflowJsonPreview, runWorkflowScript, WorkflowScriptError } from "../../src/workflows/scripted-workflow.ts";
+
+const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const SCRIPTED_WORKFLOW_MODULE_URL = pathToFileURL(path.join(PROJECT_ROOT, "src", "workflows", "scripted-workflow.ts")).href;
 
 describe("scripted workflow runtime", () => {
 	it("runs keyed children, streams progress, and exposes no host capabilities", async () => {
@@ -39,6 +45,23 @@ describe("scripted workflow runtime", () => {
 		assert.equal(result.trace.filter((entry) => entry.state === "completed").length, 3);
 		assert.ok(traceSnapshots.length >= 6);
 		assert.deepEqual(emitSnapshots, [1]);
+	});
+
+	it("runs inside an inline ESM entrypoint without CommonJS worker globals", () => {
+		const script = `import { runWorkflowScript } from ${JSON.stringify(SCRIPTED_WORKFLOW_MODULE_URL)};
+const result = await runWorkflowScript({
+	script: ${JSON.stringify(`const child = await runs.run("scan", { agent: "worker", task: "Inspect" }); return { child: child.output };`)},
+	timeoutMs: 1000,
+	launch: async (key, params) => ({ key, ok: true, output: String(params.task ?? ""), artifactPaths: [], results: [] }),
+	status: async (key) => ({ key, ok: true, output: "ok", artifactPaths: [] }),
+});
+console.log(JSON.stringify(result.value));`;
+		const completed = spawnSync(process.execPath, ["--experimental-strip-types", "--input-type=module", "--eval", script], {
+			cwd: PROJECT_ROOT,
+			encoding: "utf-8",
+		});
+		assert.equal(completed.status, 0, completed.stderr || completed.stdout);
+		assert.equal(completed.stdout.trim(), '{"child":"Inspect"}');
 	});
 
 	it("waits for every runs.all child and returns ordinary failures in input order", async () => {
