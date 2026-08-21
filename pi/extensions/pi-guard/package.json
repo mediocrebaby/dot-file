@@ -1,0 +1,20 @@
+{
+  "name": "pi-guard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:helper": "node scripts/build-helper.mjs",
+    "build:helper:host": "node scripts/build-helper.mjs --host",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build:helper:host",
+    "test": "node --test rm-command.test.ts",
+    "check": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "0.84.2",
+    "@earendil-works/pi-tui": "0.84.2",
+    "@types/node": "24.13.3",
+    "typescript": "5.9.3"
+  }
+}

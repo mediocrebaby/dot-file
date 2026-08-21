@@ -11,7 +11,17 @@ import {
 	type TUI,
 } from "@earendil-works/pi-tui";
 
-import { sanitizeTerminalText } from "./rm-command.ts";
+import {
+	UI_MAX_GROUP_BYTES,
+	UI_MAX_GROUPS,
+	UI_MAX_TOTAL_BYTES,
+} from "./constants.ts";
+import {
+	sanitizeTerminalText,
+	truncateUtf8,
+	type RmCommandGroup,
+	utf8ByteLength,
+} from "./rm-command.ts";
 
 const PANEL_WIDTH = 84;
 const PANEL_MARGIN = 1;
@@ -20,6 +30,8 @@ const CONTENT_HORIZONTAL_PADDING = 2;
 const CODE_FRAME_WIDTH = 2;
 const CODE_HORIZONTAL_PADDING = 2;
 const MIN_TEXT_WIDTH = 1;
+const DEFAULT_SELECTED_OPTION_INDEX = 1;
+const TRUNCATION_MARKER = "\n…（命令内容已截断）";
 
 interface ConfirmationOption {
 	label: string;
@@ -34,7 +46,48 @@ const CONFIRMATION_OPTIONS: readonly ConfirmationOption[] = [
 
 export interface RmConfirmationOptions {
 	commands: string[];
-	extractionIncomplete: boolean;
+	analysisIncomplete: boolean;
+	commandsTruncated: boolean;
+}
+
+export type ConfirmationPreparation =
+	| { kind: "ready"; options: RmConfirmationOptions }
+	| { kind: "too_large"; reason: string };
+
+export function prepareRmConfirmation(
+	groups: RmCommandGroup[],
+	analysisIncomplete: boolean,
+): ConfirmationPreparation {
+	if (groups.length > UI_MAX_GROUPS) {
+		return {
+			kind: "too_large",
+			reason: `检测到 ${groups.length} 个命令组，超过 ${UI_MAX_GROUPS} 个确认上限`,
+		};
+	}
+	const totalBytes = groups.reduce(
+		(sum, group) => sum + utf8ByteLength(group.command),
+		0,
+	);
+	if (totalBytes > UI_MAX_TOTAL_BYTES) {
+		return {
+			kind: "too_large",
+			reason: `命令组总计 ${totalBytes} 字节，超过 ${UI_MAX_TOTAL_BYTES} 字节确认上限`,
+		};
+	}
+
+	let commandsTruncated = false;
+	const commands = groups.map((group) => {
+		if (utf8ByteLength(group.command) <= UI_MAX_GROUP_BYTES) {
+			return group.command;
+		}
+		commandsTruncated = true;
+		const markerBytes = utf8ByteLength(TRUNCATION_MARKER);
+		return `${truncateUtf8(group.command, UI_MAX_GROUP_BYTES - markerBytes)}${TRUNCATION_MARKER}`;
+	});
+	return {
+		kind: "ready",
+		options: { commands, analysisIncomplete, commandsTruncated },
+	};
 }
 
 export async function confirmRmExecution(
@@ -62,16 +115,27 @@ export async function confirmRmExecution(
 }
 
 class RmConfirmationComponent implements Component {
-	private selectedIndex = 0;
+	private selectedIndex = DEFAULT_SELECTED_OPTION_INDEX;
 	private completed = false;
+	private readonly tui: TUI;
+	private readonly theme: Theme;
+	private readonly keybindings: KeybindingsManager;
+	private readonly options: RmConfirmationOptions;
+	private readonly done: (result: boolean) => void;
 
 	constructor(
-		private readonly tui: TUI,
-		private readonly theme: Theme,
-		private readonly keybindings: KeybindingsManager,
-		private readonly options: RmConfirmationOptions,
-		private readonly done: (result: boolean) => void,
-	) {}
+		tui: TUI,
+		theme: Theme,
+		keybindings: KeybindingsManager,
+		options: RmConfirmationOptions,
+		done: (result: boolean) => void,
+	) {
+		this.tui = tui;
+		this.theme = theme;
+		this.keybindings = keybindings;
+		this.options = options;
+		this.done = done;
+	}
 
 	render(width: number): string[] {
 		const panelWidth = Math.max(MIN_TEXT_WIDTH, width);
@@ -80,38 +144,44 @@ class RmConfirmationComponent implements Component {
 			panelWidth - FRAME_WIDTH - CONTENT_HORIZONTAL_PADDING,
 		);
 		const lines: string[] = [this.renderBorder("top", panelWidth)];
+		const countMessage =
+			this.options.commands.length === 0
+				? "未提取到可展示的命令组"
+				: `即将执行 ${this.options.commands.length} 个包含 rm 的命令组`;
 
 		lines.push(
 			...this.renderWrappedRows(
-				this.theme.fg(
-					"warning",
-					this.theme.bold("⚠ 删除命令确认"),
-				),
+				this.theme.fg("warning", this.theme.bold("⚠ 删除命令确认")),
 				contentWidth,
 			),
 			...this.renderWrappedRows(
 				this.theme.fg(
 					"muted",
-					"检测到可能造成数据丢失的 rm 命令，请确认是否执行。",
+					"检测到可能造成数据丢失的 rm 操作，请确认是否执行。",
 				),
 				contentWidth,
 			),
 			this.renderEmptyRow(contentWidth),
-			this.renderRow(
-				this.theme.fg(
-					"text",
-					`即将执行 ${this.options.commands.length} 条 rm 命令`,
-				),
-				contentWidth,
-			),
+			this.renderRow(this.theme.fg("text", countMessage), contentWidth),
 		);
 
-		if (this.options.extractionIncomplete) {
+		if (this.options.analysisIncomplete) {
 			lines.push(
 				...this.renderWrappedRows(
 					this.theme.fg(
 						"warning",
-						"未能安全提取完整参数，仅显示检测到的 rm 命令名。",
+						"静态或模型分析失败，以下静态结果可能不完整。",
+					),
+					contentWidth,
+				),
+			);
+		}
+		if (this.options.commandsTruncated) {
+			lines.push(
+				...this.renderWrappedRows(
+					this.theme.fg(
+						"warning",
+						"至少一个命令组超过显示限制，确认框仅展示其截断内容。",
 					),
 					contentWidth,
 				),
@@ -126,10 +196,7 @@ class RmConfirmationComponent implements Component {
 			),
 			this.renderEmptyRow(contentWidth),
 			...this.renderWrappedRows(
-				this.theme.fg(
-					"dim",
-					"↑/↓ 选择 · Enter 确认 · Esc 拦截",
-				),
+				this.theme.fg("dim", "↑/↓ 选择 · Enter 确认 · Esc 拦截"),
 				contentWidth,
 			),
 			this.renderBorder("bottom", panelWidth),
@@ -189,8 +256,7 @@ class RmConfirmationComponent implements Component {
 			MIN_TEXT_WIDTH,
 			boxInnerWidth - CODE_HORIZONTAL_PADDING,
 		);
-		const borderColor = (text: string) =>
-			this.theme.fg("borderMuted", text);
+		const borderColor = (text: string) => this.theme.fg("borderMuted", text);
 		const lines = [
 			this.renderRow(
 				borderColor(`┌${"─".repeat(boxInnerWidth)}┐`),
@@ -199,8 +265,7 @@ class RmConfirmationComponent implements Component {
 		];
 
 		for (const [index, command] of this.options.commands.entries()) {
-			const prefix =
-				this.options.commands.length > 1 ? `${index + 1}. ` : "";
+			const prefix = this.options.commands.length > 1 ? `${index + 1}. ` : "";
 			const safeCommand = sanitizeTerminalText(command);
 			const wrappedLines = safeCommand
 				.split("\n")
@@ -219,7 +284,6 @@ class RmConfirmationComponent implements Component {
 					),
 				);
 			}
-
 			for (const wrappedLine of wrappedLines) {
 				lines.push(
 					this.renderRow(

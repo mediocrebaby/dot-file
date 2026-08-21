@@ -1,10 +1,8 @@
 /**
- * Block rm Extension
+ * pi-guard
  *
- * 拦截 Bash 工具中包含独立命令词 `rm` 的调用,弹窗让用户确认是否放行。
- * 匹配 `\brm\b`,覆盖 `rm -rf`、`sudo rm`、`/bin/rm`、`&& rm` 等场景,
- * 不会误伤 `npm`、`mkdir`、`chrm` 等含子串的命令。
- * 无 UI 环境(如 print 模式)下默认阻止执行。
+ * 在内置 Bash 工具的 tool_call 阶段分析 rm 操作；静态分析不完整时调用
+ * 当前会话或用户配置的模型，最终由确认面板决定是否放行。
  */
 
 import type {
@@ -13,8 +11,11 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
-import { extractRmCommands } from "./rm-command.ts";
-import { confirmRmExecution } from "./rm-confirmation.ts";
+import { RmGuardAnalyzer } from "./rm-analysis.ts";
+import {
+	confirmRmExecution,
+	prepareRmConfirmation,
+} from "./rm-confirmation.ts";
 
 export const PI_GUARD_CONFIRMATION_REQUIRED_EVENT =
 	"pi-guard:confirmation-required";
@@ -24,19 +25,49 @@ export interface PiGuardConfirmationRequiredPayload {
 	mode: ExtensionContext["mode"];
 }
 
-const RM_PATTERN = /\brm\b/;
-const RM_COMMAND_FALLBACK = "rm";
+const BLOCK_REASON_NO_UI = "检测到 rm 操作，当前无 UI 无法确认，已拦截";
+const BLOCK_REASON_USER_REJECTED = "用户拒绝执行包含 rm 的命令";
+const BLOCK_REASON_ANALYSIS_ABORTED = "rm 分析已取消，命令已拦截";
+const BLOCK_REASON_UNEXPECTED_FAILURE = "pi-guard 分析异常，命令已拦截";
+const BLOCK_REASON_UI_FAILURE = "rm 确认界面异常，命令已拦截";
 
 export default function (pi: ExtensionAPI) {
+	const analyzer = new RmGuardAnalyzer();
+
+	pi.on("session_start", async (_event, ctx) => {
+		await analyzer.initialize(ctx);
+	});
+
+	pi.on("session_shutdown", () => {
+		analyzer.shutdown();
+	});
 
 	pi.on("tool_call", async (event, ctx) => {
 		if (!isToolCallEventType("bash", event)) return;
 
-		const command = event.input.command;
-		if (!RM_PATTERN.test(command)) return;
-
+		let outcome;
+		try {
+			outcome = await analyzer.analyze(event.input.command, ctx);
+		} catch (error) {
+			console.error(`pi-guard 分析异常: ${formatError(error)}`);
+			return { block: true, reason: BLOCK_REASON_UNEXPECTED_FAILURE };
+		}
+		if (outcome.kind === "allow") return;
+		if (outcome.kind === "analysis_failed" && outcome.aborted) {
+			return { block: true, reason: BLOCK_REASON_ANALYSIS_ABORTED };
+		}
 		if (!ctx.hasUI) {
-			return { block: true, reason: "含 rm 命令,当前无 UI 无法确认,默认拦截" };
+			return { block: true, reason: BLOCK_REASON_NO_UI };
+		}
+
+		const groups =
+			outcome.kind === "rm_found" ? outcome.groups : outcome.staticGroups;
+		const preparation = prepareRmConfirmation(
+			groups,
+			outcome.kind === "analysis_failed",
+		);
+		if (preparation.kind === "too_large") {
+			return { block: true, reason: preparation.reason };
 		}
 
 		const confirmationRequest: PiGuardConfirmationRequiredPayload = {
@@ -45,17 +76,19 @@ export default function (pi: ExtensionAPI) {
 		};
 		pi.events.emit(PI_GUARD_CONFIRMATION_REQUIRED_EVENT, confirmationRequest);
 
-		const extractedCommands = extractRmCommands(command);
-		const ok = await confirmRmExecution(ctx.ui, {
-			commands:
-				extractedCommands.length > 0
-					? extractedCommands
-					: [RM_COMMAND_FALLBACK],
-			extractionIncomplete: extractedCommands.length === 0,
-		});
-
-		if (!ok) {
-			return { block: true, reason: "用户拒绝执行 rm 命令" };
+		let confirmed: boolean;
+		try {
+			confirmed = await confirmRmExecution(ctx.ui, preparation.options);
+		} catch (error) {
+			console.error(`pi-guard 确认界面失败: ${formatError(error)}`);
+			return { block: true, reason: BLOCK_REASON_UI_FAILURE };
+		}
+		if (!confirmed) {
+			return { block: true, reason: BLOCK_REASON_USER_REJECTED };
 		}
 	});
+}
+
+function formatError(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
 }

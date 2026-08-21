@@ -1,0 +1,8 @@
+[
+  { "platform": "win32", "arch": "x64", "goos": "windows", "goarch": "amd64", "directory": "windows-amd64", "extension": ".exe" },
+  { "platform": "win32", "arch": "arm64", "goos": "windows", "goarch": "arm64", "directory": "windows-arm64", "extension": ".exe" },
+  { "platform": "linux", "arch": "x64", "goos": "linux", "goarch": "amd64", "directory": "linux-amd64", "extension": "" },
+  { "platform": "linux", "arch": "arm64", "goos": "linux", "goarch": "arm64", "directory": "linux-arm64", "extension": "" },
+  { "platform": "darwin", "arch": "x64", "goos": "darwin", "goarch": "amd64", "directory": "darwin-amd64", "extension": "" },
+  { "platform": "darwin", "arch": "arm64", "goos": "darwin", "goarch": "arm64", "directory": "darwin-arm64", "extension": "" }
+]
