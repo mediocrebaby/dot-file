@@ -5,7 +5,16 @@ import { StringEnum, complete, type Api, type ImageContent, type Model, type Tex
 import type { ExtractedContent, ExtractOptions } from "./extract.ts";
 import { normalizeFetchContentParams } from "./fetch-params.ts";
 import { clearCloneCache } from "./github-extract.ts";
-import { normalizeSearchProviderSelection, SEARCH_PROVIDERS, search, type AttributedSearchResponse, type SearchProvider, type SearchProviderSelection } from "./search.ts";
+import {
+	failedSearchProvider,
+	SEARCH_PROVIDERS,
+	selectSearchProvider,
+	SearchExecutionError,
+	search,
+	type AttributedSearchResponse,
+	type SearchProvider,
+	type SearchProviderSelection,
+} from "./search.ts";
 import type { SearchResult } from "./search.ts";
 import { formatSeconds, getWebSearchConfigDir, getWebSearchConfigPath, resolveCuratorNetworkConfig } from "./utils.ts";
 import {
@@ -92,6 +101,8 @@ interface WebSearchConfig {
 	summaryModel?: string;
 	webSearch?: {
 		enabled?: boolean;
+		provider?: unknown;
+		openai?: unknown;
 	};
 	toolNames?: Partial<ToolNames>;
 	shortcuts?: {
@@ -208,20 +219,33 @@ function loadConfigForExtensionInit(): WebSearchConfig {
 	}
 }
 
-function normalizeProviderInput(value: unknown, label = "provider"): SearchProviderSelection | undefined {
-	if (value === undefined) return undefined;
-	return normalizeSearchProviderSelection(value, label);
-}
-
 function resolveRequestedProvider(requested: unknown): SearchProviderSelection {
-	const normalizedRequested = normalizeProviderInput(requested);
-	if (normalizedRequested && normalizedRequested !== "auto") return normalizedRequested;
+	if (requested !== undefined) return selectSearchProvider(requested, undefined);
 	const config = loadConfig();
-	return normalizeProviderInput(config.searchProvider ?? config.provider, `provider in ${WEB_SEARCH_CONFIG_PATH}`) ?? "auto";
+	return selectSearchProvider(
+		undefined,
+		config.webSearch?.provider ?? config.searchProvider ?? config.provider,
+		`provider in ${WEB_SEARCH_CONFIG_PATH}`,
+	);
 }
 
 function toCuratorProvider(provider: SearchProviderSelection): CuratorProvider | undefined {
 	return provider === "auto" ? undefined : provider;
+}
+
+function failureProvider(error: unknown, requested: SearchProviderSelection): string | undefined {
+	return failedSearchProvider(error) ?? toCuratorProvider(requested);
+}
+
+function failureCategory(error: unknown): string | undefined {
+	if (error instanceof SearchExecutionError) {
+		const categories = [...new Set(error.attempts.map(attempt => attempt.category))];
+		return categories.length === 1 ? categories[0] : categories.length > 1 ? "multiple" : undefined;
+	}
+	if (error && typeof error === "object" && typeof (error as { category?: unknown }).category === "string") {
+		return (error as { category: string }).category;
+	}
+	return undefined;
 }
 
 function normalizeRecencyFilter(value: unknown): RecencyFilter | undefined {
@@ -276,7 +300,7 @@ async function loadCuratorBootstrap(
 ): Promise<CuratorBootstrap> {
 	const provider = resolveRequestedProvider(requestedProvider);
 	return {
-		defaultProvider: provider === "auto" ? "duckduckgo" : provider,
+		defaultProvider: provider === "auto" ? "openai" : provider,
 		timeoutSeconds: getCuratorTimeoutSeconds(),
 	};
 }
@@ -337,6 +361,7 @@ function formatSearchSummary(results: SearchResult[], answer: string): string {
 function formatSourceCheckResult(artifact: ResearchArtifact, getSearchContentTool = DEFAULT_TOOL_NAMES.getSearchContent): string {
 	const assessment = artifact.claims?.[0];
 	const lines = [`# Source check: ${artifact.query}`, ""];
+	if (artifact.provider) lines.push(`**Provider:** ${artifact.provider}`, "");
 	if (assessment) {
 		lines.push(`**Status:** ${assessment.status} (confidence ${assessment.confidence.toFixed(2)})`);
 		lines.push(`**Rationale:** ${assessment.rationale}`);
@@ -346,7 +371,10 @@ function formatSourceCheckResult(artifact: ResearchArtifact, getSearchContentToo
 	}
 	if (artifact.sources.length > 0) {
 		lines.push("## Sources");
-		for (const source of artifact.sources) lines.push(`${source.rank}. [${source.quality}] ${source.title}\n   ${source.url}`);
+		for (const source of artifact.sources) {
+			const attribution = source.provider ? `${source.quality}/${source.provider}` : source.quality;
+			lines.push(`${source.rank}. [${attribution}] ${source.title}\n   ${source.url}`);
+		}
 		lines.push("");
 	}
 	if (artifact.errors?.length) lines.push(`Search errors: ${artifact.errors.map((entry) => `${entry.query}: ${entry.error}`).join("; ")}`);
@@ -570,7 +598,9 @@ function formatEntryLine(
 	entry: ActivityEntry,
 	theme: ExtensionTheme,
 ): string {
-	const typeStr = entry.type === "api" ? "API" : "GET";
+	const typeStr = entry.type === "api"
+		? entry.provider === "openai" ? "OAI" : entry.provider === "duckduckgo" ? "DDG" : "API"
+		: "GET";
 	const target =
 		entry.type === "api"
 			? `"${truncateToWidth(entry.query || "", 28, "")}"`
@@ -762,7 +792,7 @@ export default function (pi: ExtensionAPI) {
 	async function resolveFirstAvailableModel(
 		ctx: SummaryGenerationContext,
 		candidates: Array<{ provider: string; id: string }>,
-	): Promise<{ model: Model<Api>; apiKey: string; headers?: Record<string, string> }> {
+	): Promise<{ model: Model<Api>; apiKey: string; headers?: Record<string, string | null> }> {
 		const enabledModelPatterns = loadEnabledModelPatterns(ctx);
 		for (const { provider, id } of candidates) {
 			const model = ctx.modelRegistry.find(provider, id);
@@ -1145,18 +1175,28 @@ export default function (pi: ExtensionAPI) {
 					},
 					async onAddSearch(query) {
 						if (pendingCurates.get(callId) !== pc) throw new Error("Curator session is no longer active.");
-						const response = await search(query, {
-							provider: pc.searchProvider,
-							numResults: pc.numResults,
-							recencyFilter: pc.recencyFilter,
-							domainFilter: pc.domainFilter,
-							includeContent: pc.includeContent,
-							signal: addSearchSignal,
-							extensionContext: ctx,
-						});
-						if (pendingCurates.get(callId) !== pc) throw new Error("Curator session is no longer active.");
-						if (response.inlineContent) pc.allInlineContent.push(...response.inlineContent);
-						return toCuratorSearchEntries(response);
+						try {
+							const response = await search(query, {
+								provider: pc.searchProvider,
+								numResults: pc.numResults,
+								recencyFilter: pc.recencyFilter,
+								domainFilter: pc.domainFilter,
+								includeContent: pc.includeContent,
+								signal: addSearchSignal,
+								extensionContext: ctx,
+							});
+							if (pendingCurates.get(callId) !== pc) throw new Error("Curator session is no longer active.");
+							if (response.inlineContent) pc.allInlineContent.push(...response.inlineContent);
+							return toCuratorSearchEntries(response);
+						} catch (error) {
+							if (addSearchSignal.aborted) throw error;
+							return [{
+								answer: "",
+								results: [],
+								error: error instanceof Error ? error.message : String(error),
+								provider: failureProvider(error, pc.searchProvider) ?? "unknown",
+							}];
+						}
 					},
 					onAddSearchResults(entries) {
 						if (pendingCurates.get(callId) !== pc) return;
@@ -1292,9 +1332,9 @@ export default function (pi: ExtensionAPI) {
 		name: toolNames.webSearch,
 		label: "Web Search",
 		description:
-			`Search the web using DuckDuckGo (a free, zero-config HTML scraping search — no API key required). Returns an AI-synthesized answer with source citations. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query gets its own synthesized answer, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Searches auto-open the interactive browser curator and stream results live; set workflow to "none" to skip curation or "auto-summary" for a model-generated summary without the browser curator. Omit provider — DuckDuckGo is the only provider and is always used.`,
+			`Search the web using OpenAI Responses web_search when configured, with per-query DuckDuckGo fallback. Returns an AI-synthesized answer with attributable sources. For comprehensive research, prefer queries (plural) with 2-4 varied angles over a single query — each query is routed independently, so varying phrasing and scope gives much broader coverage. When includeContent is true, full page content is fetched in the background. Searches auto-open the interactive browser curator and stream results live; set workflow to "none" to skip curation or "auto-summary" for a model-generated summary without the browser curator. Omit provider to use the configured OpenAI → DuckDuckGo route.`,
 		promptSnippet:
-			"Use for web research questions. Prefer {queries:[...]} with 2-4 varied angles over a single query for broader coverage. Omit provider unless explicitly overriding the configured default.",
+			"Use for web research questions. Prefer {queries:[...]} with 2-4 varied angles over a single query for broader coverage. Omit provider to allow OpenAI with DuckDuckGo fallback; use duckduckgo only when explicitly requested.",
 		parameters: Type.Object({
 			query: Type.Optional(Type.String({ description: "Single search query. For research tasks, prefer 'queries' with multiple varied angles instead." })),
 			queries: Type.Optional(Type.Array(Type.String(), { description: "Multiple queries searched in sequence, each returning its own synthesized answer. Prefer this for research — vary phrasing, scope, and angle across 2-4 queries to maximize coverage. Good: ['React vs Vue performance benchmarks 2026', 'React vs Vue developer experience comparison', 'React ecosystem size vs Vue ecosystem']. Bad: ['React vs Vue', 'React vs Vue comparison', 'React vs Vue review'] (too similar, redundant results)." })),
@@ -1304,7 +1344,7 @@ export default function (pi: ExtensionAPI) {
 				StringEnum(["day", "week", "month", "year"], { description: "Filter by recency" }),
 			),
 			domainFilter: Type.Optional(Type.Array(Type.String(), { description: "Limit to domains (prefix with - to exclude)" })),
-			provider: Type.Optional(searchProviderSchema("Search provider. DuckDuckGo is the only provider (\"duckduckgo\" or \"auto\", equivalent) — omit this field unless explicitly overriding it.")),
+			provider: Type.Optional(searchProviderSchema("Search provider: auto (OpenAI then DuckDuckGo fallback), openai (same fallback policy), or duckduckgo (never contacts OpenAI).")),
 			workflow: Type.Optional(
 				StringEnum(["none", "summary-review", "auto-summary"], {
 					description: "Search workflow mode: none = no curator, summary-review = open curator with auto summary draft (default), auto-summary = generate summary without opening curator",
@@ -1470,7 +1510,7 @@ export default function (pi: ExtensionAPI) {
 					} catch (err) {
 						if (signal?.aborted || cancelled || searchAbort.signal.aborted) break;
 						const message = err instanceof Error ? err.message : String(err);
-						const failedProvider = toCuratorProvider(requestedProvider);
+						const failedProvider = failureProvider(err, requestedProvider);
 						searchResults.set(qi, { query: queryList[qi], answer: "", results: [], error: message, provider: failedProvider });
 						resultSlots.set(qi, qi);
 						const curator = activeCurators.get(callId);
@@ -1552,8 +1592,7 @@ export default function (pi: ExtensionAPI) {
 				} catch (err) {
 					if (signal?.aborted || isAbortError(err)) throw err;
 					const message = err instanceof Error ? err.message : String(err);
-					const requestedProvider = toCuratorProvider(resolvedProvider);
-					searchResults.push({ query, answer: "", results: [], error: message, provider: requestedProvider });
+					searchResults.push({ query, answer: "", results: [], error: message, provider: failureProvider(err, resolvedProvider) });
 				}
 			}
 
@@ -1862,7 +1901,7 @@ export default function (pi: ExtensionAPI) {
 			fetchContent: Type.Optional(Type.Boolean({ description: "Fetch up to 5 result pages for exact passage extraction." })),
 			recencyFilter: Type.Optional(StringEnum(["day", "week", "month", "year"], { description: "Filter by recency." })),
 			domainFilter: Type.Optional(Type.Array(Type.String(), { description: "Limit to domains; prefix with - to exclude." })),
-			provider: Type.Optional(searchProviderSchema("Search provider. DuckDuckGo is the only provider (\"duckduckgo\" or \"auto\", equivalent) — omit this field unless explicitly overriding it.")),
+			provider: Type.Optional(searchProviderSchema("Search provider: auto (OpenAI then DuckDuckGo fallback), openai (same fallback policy), or duckduckgo (never contacts OpenAI).")),
 		}),
 		async execute(_callId, params, signal, _onUpdate, ctx) {
 			const claim = typeof params.claim === "string" ? params.claim.trim() : "";
@@ -1881,10 +1920,9 @@ export default function (pi: ExtensionAPI) {
 				? params.domainFilter.filter((domain): domain is string => typeof domain === "string")
 				: undefined;
 			const recencyFilter = normalizeRecencyFilter(params.recencyFilter);
-			const resultsByUrl = new Map<string, SearchResult>();
+			const resultsByUrl = new Map<string, SearchResult & { provider: string }>();
 			const summaries: string[] = [];
-			const errors: Array<{ query: string; error: string }> = [];
-			let provider: string | undefined;
+			const errors: Array<{ query: string; error: string; provider?: string; category?: string }> = [];
 
 			for (const query of queries) {
 				if (signal?.aborted) break;
@@ -1898,14 +1936,18 @@ export default function (pi: ExtensionAPI) {
 						extensionContext: ctx,
 					});
 					if (signal?.aborted) break;
-					provider ??= response.provider;
 					if (response.answer) summaries.push(`${query}: ${response.answer}`);
 					for (const result of response.results) {
-						if (!resultsByUrl.has(result.url)) resultsByUrl.set(result.url, result);
+						if (!resultsByUrl.has(result.url)) resultsByUrl.set(result.url, { ...result, provider: response.provider });
 					}
 				} catch (err) {
 					if (signal?.aborted || isAbortError(err)) break;
-					errors.push({ query, error: err instanceof Error ? err.message : String(err) });
+					errors.push({
+						query,
+						error: err instanceof Error ? err.message : String(err),
+						provider: failedSearchProvider(err),
+						category: failureCategory(err),
+					});
 				}
 			}
 
@@ -1925,7 +1967,6 @@ export default function (pi: ExtensionAPI) {
 			}
 			const artifact = withClaimAssessment(buildResearchArtifact({
 				query: claim,
-				provider,
 				summary: summaries.length > 0 ? summaries.join("\n\n") : undefined,
 				results,
 				fetched,
@@ -2569,15 +2610,25 @@ export default function (pi: ExtensionAPI) {
 							if (commandHandle && !isCommandActive()) {
 								throw new Error("Curator session is no longer active.");
 							}
-							const response = await search(query, {
-								provider: currentSearchProvider,
-								signal: searchAbort.signal,
-								extensionContext: ctx,
-							});
-							if (commandHandle && !isCommandActive()) {
-								throw new Error("Curator session is no longer active.");
+							try {
+								const response = await search(query, {
+									provider: currentSearchProvider,
+									signal: searchAbort.signal,
+									extensionContext: ctx,
+								});
+								if (commandHandle && !isCommandActive()) {
+									throw new Error("Curator session is no longer active.");
+								}
+								return toCuratorSearchEntries(response);
+							} catch (error) {
+								if (searchAbort.signal.aborted) throw error;
+								return [{
+									answer: "",
+									results: [],
+									error: error instanceof Error ? error.message : String(error),
+									provider: failureProvider(error, currentSearchProvider) ?? "unknown",
+								}];
 							}
-							return toCuratorSearchEntries(response);
 						},
 						onAddSearchResults(entries) {
 							if (commandHandle && !isCommandActive()) return;
@@ -2666,7 +2717,7 @@ export default function (pi: ExtensionAPI) {
 							} catch (err) {
 								if (aborted || !isCommandActive()) break;
 								const message = err instanceof Error ? err.message : String(err);
-								const failedProvider = toCuratorProvider(requestedProvider);
+								const failedProvider = failureProvider(err, requestedProvider);
 								handle.pushError(qi, message, failedProvider, { query: queries[qi], slotIndex: qi });
 								collected.set(qi, { query: queries[qi], answer: "", results: [], error: message, provider: failedProvider });
 							}

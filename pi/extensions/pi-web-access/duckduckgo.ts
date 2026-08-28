@@ -1,10 +1,15 @@
 import { parseHTML } from "linkedom";
 import { activityMonitor } from "./activity.ts";
 import type { SearchOptions, SearchResponse, SearchResult } from "./search.ts";
+import {
+	MAX_SEARCH_RESULTS,
+	normalizeSearchDomainFilters,
+	normalizeSearchResultCount,
+	type NormalizedSearchDomainFilters,
+} from "./search-options.ts";
 
 const DUCKDUCKGO_URL = "https://html.duckduckgo.com/html/";
 const SEARCH_TIMEOUT_MS = 30_000;
-const MAX_NUM_RESULTS = 20;
 // A small pool of current desktop browser User-Agents. Every install of this extension previously sent
 // the exact same hardcoded string, turning that one fingerprint into an easy target for DuckDuckGo's
 // abuse detection; picking one at random per request spreads requests across several fingerprints.
@@ -27,43 +32,7 @@ const CACHE_MAX_ENTRIES = 200;
 const RATE_LIMIT_GUIDANCE =
 	"DuckDuckGo search is being rate-limited. This uses the unofficial html.duckduckgo.com scraping endpoint (there is no free official web search API), which has no SLA — wait a bit and retry.";
 
-interface NormalizedDomainFilters {
-	allowed: string[];
-	blocked: string[];
-}
-
-function normalizeCount(value: number | undefined): number {
-	if (typeof value !== "number" || !Number.isFinite(value)) return 5;
-	return Math.max(1, Math.min(Math.floor(value), MAX_NUM_RESULTS));
-}
-
-function normalizeDomain(value: string): string | null {
-	let input = value.trim().toLowerCase();
-	if (!input) return null;
-	if (input.startsWith("-")) input = input.slice(1).trim();
-	if (!input) return null;
-	try {
-		const parsed = input.includes("://") ? new URL(input) : new URL(`https://${input}`);
-		input = parsed.hostname;
-	} catch {
-		input = input.split("/")[0]?.split(":")[0] ?? "";
-	}
-	input = input.replace(/^\.+|\.+$/g, "");
-	return /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}$/i.test(input) ? input : null;
-}
-
-function normalizeDomainFilters(domainFilter: string[] | undefined): NormalizedDomainFilters {
-	const filters: NormalizedDomainFilters = { allowed: [], blocked: [] };
-	for (const raw of domainFilter ?? []) {
-		const domain = normalizeDomain(raw);
-		if (!domain) continue;
-		const target = raw.trim().startsWith("-") ? filters.blocked : filters.allowed;
-		if (!target.includes(domain)) target.push(domain);
-	}
-	return filters;
-}
-
-function buildDuckDuckGoQuery(query: string, filters: NormalizedDomainFilters): string {
+function buildDuckDuckGoQuery(query: string, filters: NormalizedSearchDomainFilters): string {
 	const parts = [query];
 	if (filters.allowed.length === 1) {
 		parts.push(`site:${filters.allowed[0]}`);
@@ -185,8 +154,8 @@ export function isDuckDuckGoAvailable(): boolean {
 }
 
 export async function searchWithDuckDuckGo(query: string, options: SearchOptions = {}): Promise<SearchResponse> {
-	const numResults = normalizeCount(options.numResults);
-	const filters = normalizeDomainFilters(options.domainFilter);
+	const numResults = normalizeSearchResultCount(options.numResults);
+	const filters = normalizeSearchDomainFilters(options.domainFilter);
 	const searchQuery = buildDuckDuckGoQuery(query, filters);
 	const params = new URLSearchParams({ q: searchQuery });
 	const df = mapRecencyFilter(options.recencyFilter);
@@ -199,7 +168,7 @@ export async function searchWithDuckDuckGo(query: string, options: SearchOptions
 		return { answer: buildAnswer(sliced), results: sliced };
 	}
 
-	const activityId = activityMonitor.logStart({ type: "api", query: searchQuery });
+	const activityId = activityMonitor.logStart({ type: "api", query: searchQuery, provider: "duckduckgo" });
 
 	try {
 		await scheduleRequestSlot(options.signal);
@@ -248,7 +217,7 @@ export async function searchWithDuckDuckGo(query: string, options: SearchOptions
 			const snippetEl = container?.querySelector(".result__snippet") ?? null;
 			const snippet = snippetEl?.textContent?.replace(/\s+/g, " ").trim() || "";
 			results.push({ title, url, snippet });
-			if (results.length >= MAX_NUM_RESULTS) break;
+			if (results.length >= MAX_SEARCH_RESULTS) break;
 		}
 
 		if (results.length === 0 && response.status !== 200) {

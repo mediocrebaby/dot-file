@@ -7,6 +7,7 @@ export interface ActivityEntry {
 
 	// For API calls
 	query?: string;
+	provider?: "openai" | "duckduckgo";
 
 	// For URL fetches
 	url?: string;

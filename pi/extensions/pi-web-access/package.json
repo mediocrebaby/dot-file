@@ -1,7 +1,7 @@
 {
   "name": "pi-web-access",
   "version": "0.15.0",
-  "description": "Web search, URL fetching, GitHub repo cloning, PDF extraction, YouTube video understanding, and local video analysis for Pi coding agent. Web search uses a free, zero-config DuckDuckGo HTML scraper; extraction falls back to Firecrawl, Jina Reader, and Gemini.",
+  "description": "Web search, URL fetching, GitHub repo cloning, PDF extraction, YouTube video understanding, and local video analysis for Pi coding agent. Search prefers OpenAI Responses web_search when configured and falls back per query to zero-config DuckDuckGo.",
   "type": "module",
   "scripts": {
     "test": "node --test",
@@ -14,6 +14,8 @@
     "pi-coding-agent",
     "extension",
     "web-search",
+    "openai",
+    "responses-api",
     "duckduckgo",
     "fetch",
     "scraping"

@@ -13,6 +13,7 @@ export interface ResearchSource {
 	url: string;
 	title: string;
 	snippet?: string;
+	provider?: string;
 	fetch_timestamp?: number;
 	content_hash?: string;
 	quality: SourceQuality;
@@ -50,7 +51,7 @@ export interface ResearchArtifact {
 	summary?: string;
 	content_hash?: string;
 	filters?: { recency?: RecencyFilter; domain_include?: string[]; domain_exclude?: string[] };
-	errors?: Array<{ query: string; error: string }>;
+	errors?: Array<{ query: string; error: string; provider?: string; category?: string }>;
 }
 
 export interface ResearchSearchRequest {
@@ -211,6 +212,7 @@ export function assessClaim(claim: string, passages: ResearchPassage[]): ClaimAs
 
 interface RankedSearchResult extends SearchResult {
 	rank?: number;
+	provider?: string;
 }
 
 export interface BuildArtifactInput {
@@ -238,6 +240,7 @@ export function buildResearchArtifact(input: BuildArtifactInput): ResearchArtifa
 			url: result.url,
 			title: result.title,
 			snippet: result.snippet,
+			...(result.provider !== undefined ? { provider: result.provider } : {}),
 			quality: classifySource(result.url),
 			fetched,
 			...(page ? { fetch_timestamp: Date.now() } : {}),
@@ -246,6 +249,8 @@ export function buildResearchArtifact(input: BuildArtifactInput): ResearchArtifa
 		});
 	}
 	const passages = buildPassages(sources, input.fetched, input.query);
+	const sourceProviders = [...new Set(sources.map(source => source.provider).filter((provider): provider is string => Boolean(provider)))];
+	const resolvedProvider = input.provider ?? (sourceProviders.length === 1 ? sourceProviders[0] : sourceProviders.length > 1 ? "mixed" : undefined);
 	const domainInclude = filters.filter((domain) => !domain.startsWith("-"));
 	const domainExclude = filters.filter((domain) => domain.startsWith("-")).map((domain) => domain.slice(1));
 	return {
@@ -255,7 +260,7 @@ export function buildResearchArtifact(input: BuildArtifactInput): ResearchArtifa
 		query: input.query,
 		sources,
 		passages,
-		...(input.provider !== undefined ? { provider: input.provider } : {}),
+		...(resolvedProvider !== undefined ? { provider: resolvedProvider } : {}),
 		...(input.summary !== undefined ? { summary: input.summary } : {}),
 		...(passages.length > 0 ? { content_hash: hashContent(passages.map((passage) => passage.text).join("\n")) } : {}),
 		filters: {

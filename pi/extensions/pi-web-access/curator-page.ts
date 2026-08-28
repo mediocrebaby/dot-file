@@ -543,10 +543,20 @@ main {
   text-transform: uppercase;
   border: 1px solid transparent;
 }
+.provider-tag.provider-openai {
+  color: #b7f7dc;
+  background: rgba(16, 163, 127, 0.16);
+  border-color: rgba(16, 163, 127, 0.38);
+}
 .provider-tag.provider-duckduckgo {
   color: #f5e0a6;
   background: rgba(245, 224, 166, 0.14);
   border-color: rgba(245, 224, 166, 0.3);
+}
+.provider-tag.provider-mixed {
+  color: #d8c8ff;
+  background: rgba(139, 92, 246, 0.14);
+  border-color: rgba(139, 92, 246, 0.32);
 }
 .provider-tag.provider-unknown {
   color: var(--fg-muted);
@@ -1415,7 +1425,9 @@ const SCRIPT = `(function() {
   }
 
   function providerLabel(provider) {
+    if (provider === "openai") return "OpenAI";
     if (provider === "duckduckgo") return "DuckDuckGo";
+    if (provider === "mixed") return "OpenAI + DuckDuckGo";
     return "Unknown";
   }
 

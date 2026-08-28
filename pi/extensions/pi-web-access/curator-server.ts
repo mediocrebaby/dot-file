@@ -399,7 +399,7 @@ export function startCuratorServer(
 						answer: "",
 						results: [],
 						error: message,
-						provider: defaultProvider,
+						provider: "unknown",
 					};
 					callbacks.onAddSearchResults([entry]);
 					sendJson(res, 200, { ok: true, ...entry, entries: [entry] });
