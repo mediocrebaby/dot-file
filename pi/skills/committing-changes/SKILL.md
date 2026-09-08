@@ -29,9 +29,13 @@ If changes for multiple topics are present in the same file, use the interactive
 > [!warn]
 > If no language requirement is specified, use Chinese by default.
 
+
+### Commit Message Description
+
+The commit message should describe the changes made in this commit in as much detail as possible, rather than using vague and generic wording.
+
 ## Must Not
 
 ❌ Use `git log` to inspect commit history.
 ❌ Include a commit body or footer in the commit message.
 
-If you violate these rules, you will be fined 1 million US dollars.
