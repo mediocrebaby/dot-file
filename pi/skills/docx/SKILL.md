@@ -1,6 +1,6 @@
 ---
 name: docx
-description: "Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files) or Word templates (.dotx files). Triggers include: any mention of 'Word doc', 'word document', '.docx', '.dotx', or requests to produce professional documents with formatting like tables of contents, headings, page numbers, or letterheads. Also use when extracting or reorganizing content from .docx or .dotx files, inserting or replacing images in documents, performing find-and-replace in Word files, working with tracked changes or comments, or converting content into a polished Word document. If the user asks for a 'report', 'memo', 'letter', 'template', or similar deliverable as a Word or .docx file, use this skill. Do NOT use for PDFs, spreadsheets, Google Docs, or general coding tasks unrelated to document generation."
+description: 创建、读取、编辑或验证 Word 文档与模板（.docx/.dotx），包括图片、批注、修订和排版；仅提到 Word 而未操作文档时不触发。
 license: Proprietary. LICENSE.txt has complete terms
 ---
 
@@ -11,14 +11,14 @@ A `.docx` is a ZIP archive of XML files. Choose your approach by task:
 | Task | Approach |
 |---|---|
 | **Create** a new document | Write a `docx` (npm) script — see gotchas below |
-| **Edit** an existing document | `unzip` → edit `word/document.xml` → `zip` (docx-js cannot open existing files) |
+| **Edit** an existing document | `safe_unpack.py` → edit `word/document.xml` → `safe_pack.py` (docx-js cannot open existing files) |
 | **Read** content | `pandoc -t markdown file.docx` |
 
 > Script paths below are relative to this skill's directory.
 
 ## Creating with docx-js — gotchas
 
-`docx` is preinstalled — do not run `npm install` first; write the script and `require('docx')` directly. Only if that require fails: `npm install docx`. The model knows the API; these are the footguns:
+Probe `require.resolve('docx')` from the actual generator directory; do not assume the npm package is installed or globally resolvable. If missing, report the dependency and install only in an authorized existing environment or a dedicated temporary tool directory, not silently into the user's app. The model knows the API; these are the footguns:
 
 - **Page size defaults to A4.** For US Letter set `page: { size: { width: 12240, height: 15840 } }` (DXA; 1440 = 1″).
 - **Landscape:** pass portrait dimensions and `orientation: PageOrientation.LANDSCAPE` — docx-js swaps width/height internally.
@@ -34,7 +34,7 @@ A `.docx` is a ZIP archive of XML files. Choose your approach by task:
 
 ## Verify the output
 
-After writing a `.docx`, render it and look at it:
+After writing a `.docx`, validate it, then render it and inspect the pages. Probe Python dependencies, LibreOffice and Poppler first; executable paths may differ on Windows. If rendering is unavailable, report XML/package validation separately and explicitly mark visual layout as unverified—do not claim the whole document passed:
 
 ```bash
 python scripts/office/soffice.py --headless --convert-to pdf output.docx
@@ -49,11 +49,10 @@ ls page-*.jpg   # then Read the images
 Legacy `.doc` files must be converted first: `python scripts/office/soffice.py --headless --convert-to docx file.doc`.
 
 ```bash
-unzip -q doc.docx -d unpacked/
-find unpacked -type l -delete   # strip symlink entries — docx from external parties is untrusted
+python scripts/safe_unpack.py doc.docx unpacked/  # validates entry paths before extraction; destination must be new
 python scripts/merge_runs.py unpacked/   # coalesce fragmented runs so text is findable
 # edit unpacked/word/document.xml in place — do NOT reformat or pretty-print
-(cd unpacked && rm -f ../out.docx && zip -Xr ../out.docx .)
+python scripts/safe_pack.py unpacked/ out.docx  # refuses an existing output; choose a new path
 python scripts/office/validate.py out.docx --original doc.docx   # XSD checks; --auto-repair fixes common issues
 # redlining? add --author "<the name you redlined under>" to check every edit is tracked
 ```
@@ -88,4 +87,6 @@ The script writes `comments.xml`, `commentsExtended.xml`, `commentsIds.xml`, `co
 
 ## Dependencies
 
-`docx` (npm, preinstalled — install only if `require('docx')` fails) · `pandoc` · LibreOffice (`soffice`) · `pdftoppm` (Poppler)
+Probe only the dependencies needed for the task: `docx` (npm) · `pandoc` · Python validator dependencies · LibreOffice (`soffice`) · `pdftoppm` (Poppler). Missing dependencies are reported, not assumed.
+
+Preserve the original; write a separate output unless overwrite is explicitly requested. Resource paths above are relative to this skill, while source/output paths belong to the user's work area; resolve them to absolute paths before invoking tools. AIGC rewriting uses [baibai-aigc](../baibai-aigc/SKILL.md) for content/rounds; this skill owns the Word container and formatting, without starting another rewriting pass. See [pi runtime](../_maintenance/PI-RUNTIME.md).

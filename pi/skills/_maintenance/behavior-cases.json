@@ -1,0 +1,18 @@
+[
+  {"skill":"baibai-aigc","trigger":"继续这篇中文论文的第二轮，第一轮已有记录。","skip":"仅总结这份论文，不改写。","expected":"定位同一工作区记录，只读第二轮 prompt，使用上一轮输出，保留术语与事实。","must_not":"重跑第一轮、混合两轮、索要聊天模式 API key、未显式选择旧数据根时写入安装目录。"},
+  {"skill":"committing-changes","trigger":"请将当前已确认改动按主题提交。","skip":"帮我审查改动，先不要提交。","expected":"核对用户暂存区、验证主题、代码测试笔记一起提交，中文单行说明。","must_not":"自动 push、无关全部暂存、改全局配置、无交互 Bash 挂起等待 git add -p。"},
+  {"skill":"condensed-tech-docs","trigger":"将这份技术方案改得简明且便于决策。","skip":"给出完整 API 参数参考，不要省略细节。","expected":"按行为解释，保留代价、约束、来源与证据。","must_not":"为了简短删除 must/never、安全例外或笔记必需标题。"},
+  {"skill":"decision-notes","trigger":"我们放弃原来的 JSONL 存储，确认改用 SQLite，并解释为什么。","skip":"修正 README 的一个错别字。","expected":"先检索已有 ADR/Notes；翻转决定新建关联；未实施保持 proposed。","must_not":"覆写旧理由、凑两个假选项、已有 ADR 再建并行库、空检查宣称已覆盖。"},
+  {"skill":"diagnosing-bugs","trigger":"两个并发调用导致状态丢失，帮我修复。","skip":"解释这段函数的功能，不修改。","expected":"真实症状的红绿回归、验证并发调用表面；有持久价值的根因关联决定。","must_not":"浅层测试冒充复现、未经请求提交、把临时日志或凭据留入笔记。"},
+  {"skill":"docx","trigger":"修改合同.docx并保留修订，输出新文件。","skip":"Word 是哪家公司开发的？","expected":"先探测所需工具，保留原件，安全解包并区分结构验证和视觉验证。","must_not":"依赖未安装就假设可用、缺渲染工具仍报告排版已验证。"},
+  {"skill":"domain-modeling","trigger":"厘清 Order 和 Purchase 两个领域术语并记录确认结果。","skip":"只读取 CONTEXT.md 了解词汇，不改模型。","expected":"核对概念与代码、确认后更新术语表；决定交接唯一 ADR/Notes。","must_not":"把实现细节塞进词汇表，或私自创建第二套决策库。"},
+  {"skill":"grill-me","trigger":"/skill:grill-me 请追问这个设计。","skip":"直接实施我已经确认的机械改动。","expected":"读取 grilling，分轮追问当前依赖前沿。","must_not":"调用不存在的工具、自动写文档、重复触发多个访谈。"},
+  {"skill":"grill-with-docs","trigger":"/skill:grill-with-docs 边讨论设计边记术语与决定。","skip":"仅讨论，不保存文件。","expected":"确认术语才写 CONTEXT，重要决定先检索再记录。","must_not":"把访谈授权当成生产实现、Git 提交或外部发布授权。"},
+  {"skill":"grilling","trigger":"压力测试这个方案，问清所有真正的取舍。","skip":"我已经确认这些选择，现在只要简短摘要。","expected":"自己查事实，按依赖分轮提问并推荐，显式记录延期或范围外项。","must_not":"向用户问可检索事实、替用户回答、无限追问已确认内容。"},
+  {"skill":"improve-codebase-architecture","trigger":"/skill:improve-codebase-architecture 只评估架构候选。","skip":"改一个按钮颜色。","expected":"使用本地架构参考、核对 ADR，交付候选和代价，等待选择。","must_not":"调用缺失的 codebase-design，未经允许直接重构。"},
+  {"skill":"prototype","trigger":"做一个可点击的状态机原型验证边界，不要生产实现。","skip":"已有明确需求，请实现并写生产测试。","expected":"选择逻辑分支，临时产物展示状态与问题，记录结论及限制。","must_not":"直接读写生产数据、自动建分支提交、把原型成功写成 implemented。"},
+  {"skill":"to-spec","trigger":"/skill:to-spec 把已确认讨论整理为 spec；没有外部 tracker。","skip":"继续访谈，我们还没确定目标。","expected":"本地 spec，不再重复已确认问题，开放选择显式标注。","must_not":"要求不可用设置命令、声称已发布 Issue、扩写虚构需求。"},
+  {"skill":"to-tickets","trigger":"/skill:to-tickets 将已确认方案拆为有依赖的可验收票据。","skip":"方案仅涉及单文件一个小修复。","expected":"用户确认后创建独立票据，阻塞链接存在且无环，不覆盖旧文件。","must_not":"擅自关闭父 Issue，把票据创建当成实现完成。"},
+  {"skill":"wayfinder","trigger":"这是一个跨数周且路线未清楚的改造，先建决策地图。","skip":"任务明确，改一个函数即可。","expected":"先定 destination，使用已有 tracker 或本地 fallback，按前沿推进。","must_not":"虚构 research skill、并行子 agent 写同一地图、关决策票就宣称产品交付。"},
+  {"skill":"writing-for-agents","trigger":"修改一个 skill 的流程与触发条件。","skip":"改写给普通读者看的新闻摘要。","expected":"核对 pi 机制，区分资源与工作区，给触发及免触发案例，验证引用。","must_not":"将手动入口隐藏当权限隔离、声称静态检查证明模型行为。"}
+]

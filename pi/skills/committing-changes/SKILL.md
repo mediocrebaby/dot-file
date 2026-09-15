@@ -1,41 +1,30 @@
 ---
 name: committing-changes
-description: Analyze a Git repository and commit its uncommitted changes. Use when the user asks to commit changes in a Git repository.
+description: 用户明确要求提交 Git 改动时，检查、验证并按逻辑主题提交；不负责自动推送。
 ---
 
-## Commit Template
+# 按主题提交
 
-<type>([scope]): <description>
+## 1. 检查范围
 
+确认仓库根、分支、`git status --short`、工作区 diff 和暂存区 diff，识别用户已有修改。按当前实际改动理解意图，不读取 `git log`。有凭据、生成数据、无关修改或不明归属时先排除或问清，不能一把全部暂存。
 
-## Workflow
+## 2. 形成提交单元
 
-### Inspect Changes
+每个单元包含同一主题的代码、回归测试及相关文档。重要改动读取 [decision-notes](../decision-notes/SKILL.md)，检查已有决定是否同步；需要新记录时只写真正已决定的事实。机械小改不新建笔记。
 
-Understand what changes have been made in the current Git repository.
+保留代码与对应笔记的原子性，不按“代码一个提交、文档一个提交”拆开同一决定。若现有暂存区混有其他主题，先确认归属，不擅自重置用户暂存内容。
 
-### Categorize by Content
+## 3. 验证后暂存
 
-Based on the repository context and the actual changes, divide the modifications into at least one logical topic.
+从项目配置发现实际测试、lint、构建和笔记检查命令，按改动范围运行并报告结果。既有 ADR 沿用项目检查；无脚本时可用 decision-notes 的只读检查器。尚未验证不能写成通过；检查失败先修，无法修复则说明阻塞，不使用跳过 hooks 等绕过方法。
 
-### Commit by Category
+使用明确文件路径暂存。一个文件跨多个主题时，在可交互终端使用 `git add -p`；当前 Bash 无交互输入时，将核对过的补丁写入临时文件后用 `git apply --cached <patch>`，再次检查 `git diff --cached`。无法安全切分则说明原因，选择一致的提交单元，不能挂起等待交互。
 
-Commit each identified topic separately, one by one.
+## 4. 提交与交付
 
-#### Multiple Topics in the Same File
+仅在用户已经授权提交后运行 `git commit`。格式：`<type>(<可选 scope>): <中文说明>`；说明具体行为，只有一行，不加正文或 footer。已有语言要求优先。
 
-If changes for multiple topics are present in the same file, use the interactive staging command `git add -p` to stage only the portions relevant to the current commit.
+每个单元提交后检查提交命令结果、`git show --stat --oneline HEAD` 和剩余工作区状态。报告提交 ID、主题、验证结果和未提交项。签名、hooks 或身份配置失败时报告原错误，不擅自改全局 Git 配置。推送、amend、回滚和历史重写需要额外授权。
 
-> [!warn]
-> If no language requirement is specified, use Chinese by default.
-
-
-### Commit Message Description
-
-The commit message should describe the changes made in this commit in as much detail as possible, rather than using vague and generic wording.
-
-## Must Not
-
-❌ Use `git log` to inspect commit history.
-❌ Include a commit body or footer in the commit message.
-
+工具与路径见 [pi 宿主适配](../_maintenance/PI-RUNTIME.md)。

@@ -16,7 +16,8 @@ from managed_sources import get_display_name_for_source
 from skill_round_helper import build_execution_context, build_round_context, ensure_skill_input_text, get_document_round_state
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+from workspace_paths import WORKSPACE_ROOT as ROOT_DIR
+FINISH_DIR = ROOT_DIR / "finish"
 ProgressCallback = Callable[[dict[str, Any]], None]
 
 
@@ -624,6 +625,29 @@ def delete_document_history(doc_id: str, from_round: int | None = None) -> dict[
     return delete_rounds(normalized_doc_id, from_round)
 
 
+def require_finish_path(value: object, field: str) -> Path:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be a path string.")
+    path = normalize_path(Path(value))
+    try:
+        path.relative_to(FINISH_DIR.resolve())
+    except ValueError as exc:
+        raise ValueError(f"{field} must stay within the workspace finish directory.") from exc
+    return path
+
+
+def normalize_execution_options(execution_options: dict[str, Any] | None) -> dict[str, Any] | None:
+    if execution_options is None:
+        return None
+    normalized = dict(execution_options)
+    for field in ("basedOnOutputPath", "basedOnManifestPath"):
+        value = normalized.get(field)
+        if value is None or value == "":
+            continue
+        normalized[field] = str(require_finish_path(value, field))
+    return normalized
+
+
 def run_round_for_app(
     source_path: str,
     model_config: dict[str, Any],
@@ -640,26 +664,25 @@ def run_round_for_app(
     offline_mode = bool(normalized_config["offlineMode"])
     prompt_profile = str(normalized_config["promptProfile"])
 
-    if not offline_mode and (not base_url or not api_key or not model):
+    if offline_mode:
+        raise ValueError("Offline mode cannot execute or complete a round; configure a model or use dry-run preview.")
+    if not base_url or not api_key or not model:
         raise ValueError("Model configuration is incomplete.")
 
-    if offline_mode:
-        def transform(chunk_text: str, _: str, __: int, ___: str) -> str:
-            return chunk_text
-    else:
-        def transform(_: str, prompt_input: str, __: int, chunk_id: str) -> str:
-            try:
-                return llm_completion(
-                    prompt_input,
-                    model=model,
-                    api_key=api_key,
-                    base_url=base_url,
-                    api_type=api_type,
-                    temperature=temperature,
-                )
-            except Exception as exc:
-                raise RuntimeError(f"LLM request failed for chunk {chunk_id}: {exc}") from exc
+    def transform(_: str, prompt_input: str, __: int, chunk_id: str) -> str:
+        try:
+            return llm_completion(
+                prompt_input,
+                model=model,
+                api_key=api_key,
+                base_url=base_url,
+                api_type=api_type,
+                temperature=temperature,
+            )
+        except Exception as exc:
+            raise RuntimeError(f"LLM request failed for chunk {chunk_id}: {exc}") from exc
 
+    execution_options = normalize_execution_options(execution_options)
     requested_apply_mode = str((execution_options or {}).get("applyMode", "") or "").strip()
     status = get_document_status(source_path, prompt_profile=prompt_profile)
     if bool(status.get("isComplete")) and requested_apply_mode != "current_round_revision":
@@ -672,6 +695,12 @@ def run_round_for_app(
         prompt_profile=prompt_profile,
         execution_options=execution_options,
     )
+    if context.based_on_output_path:
+        based_on_output = require_finish_path(context.based_on_output_path, "basedOnOutputPath")
+        context.based_on_output_path = str(based_on_output)
+        context.input_text_path = based_on_output
+    if context.based_on_manifest_path:
+        context.based_on_manifest_path = str(require_finish_path(context.based_on_manifest_path, "basedOnManifestPath"))
 
     relative_input_path = relative_to_workspace_path(str(context.input_text_path))
     relative_output_path = relative_to_workspace_path(str(context.output_text_path))
@@ -847,6 +876,9 @@ def test_model_connection(model_config: dict[str, Any]) -> dict[str, Any]:
 
 
 def export_round_output(output_path: str, export_path: str, target_format: str) -> dict[str, Any]:
+    target_format = str(target_format or "").strip().lower()
+    if target_format not in {"txt", "docx"}:
+        raise ValueError(f"Unsupported export format: {target_format}")
     normalized_output_path = normalize_path(Path(output_path))
     normalized_export_path = Path(export_path).resolve()
     normalized_export_path.parent.mkdir(parents=True, exist_ok=True)
@@ -858,16 +890,13 @@ def export_round_output(output_path: str, export_path: str, target_format: str) 
             "path": str(normalized_export_path),
         }
 
-    if target_format == "docx":
-        text = normalized_output_path.read_text(encoding="utf-8")
-        blocks = _split_text_into_blocks(text)
-        write_docx_text(blocks, normalized_export_path)
-        return {
-            "format": "docx",
-            "path": str(normalized_export_path),
-        }
-
-    raise ValueError(f"Unsupported export format: {target_format}")
+    text = normalized_output_path.read_text(encoding="utf-8")
+    blocks = _split_text_into_blocks(text)
+    write_docx_text(blocks, normalized_export_path)
+    return {
+        "format": "docx",
+        "path": str(normalized_export_path),
+    }
 
 
 def read_output_text(output_path: str) -> dict[str, Any]:

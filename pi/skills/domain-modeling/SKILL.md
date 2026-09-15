@@ -37,7 +37,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily: only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+Create files lazily and only within the task's authorized writing scope. If no `CONTEXT.md` exists, create it when the first term is resolved. The trees above illustrate existing ADR layouts, not a command to create a second decision store. Before recording a decision, read [decision-notes](../decision-notes/SKILL.md), discover the project's existing ADR/notes location, and use that single authority.
 
 ## During the session
 
@@ -63,12 +63,10 @@ When a term is resolved, update `CONTEXT.md` right there. Don't batch these up: 
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 
-### Offer ADRs sparingly
+### Hand off durable decisions
 
-Only offer to create an ADR when all three are true:
+Use [decision-notes](../decision-notes/SKILL.md) as the single recording policy. Capture non-obvious constraints, genuine trade-offs, recurring failures or costly-to-reverse choices; mechanical changes need no new record. Record real alternatives only, never manufacture options to fill a template.
 
-1. **Hard to reverse**: the cost of changing your mind later is meaningful
-2. **Surprising without context**: a future reader will wonder "why did they do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
+A glossary describes terms; an ADR/Note describes a decision. Link rather than duplicate. Fact changes update the owning record; reversed decisions create a successor. A confirmed design is still proposed until implemented and verified, with any verification gaps stated.
 
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+[ADR-FORMAT.md](ADR-FORMAT.md) describes compatibility with existing ADR repositories. Cross-skill/tool mechanics: [pi runtime](../_maintenance/PI-RUNTIME.md).

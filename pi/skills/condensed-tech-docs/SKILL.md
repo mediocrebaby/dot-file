@@ -47,3 +47,5 @@ Judge the style by its effect, not its format. After writing, ask:
 ## Boundary
 
 This style serves documents intended to support **understanding and decisions**. Documents intended for step-by-step operation—API references, deployment manuals, and code comments—need implementation details and should use a different style.
+
+This skill owns expression, not decision lifecycle. When editing ADRs/Notes, preserve the host template and the evidence, obligation words, exceptions and links required by [decision-notes](../decision-notes/SKILL.md). Keep machine-required headings even when ordinary prose would be shorter. A request to summarize or compare does not itself authorize creating decision files.

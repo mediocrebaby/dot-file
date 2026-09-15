@@ -1,47 +1,12 @@
-# ADR Format
+# 既有 ADR 的兼容规则
 
-ADRs live in `docs/adr/` and use sequential numbering: `0001-slug.md`, `0002-slug.md`, etc.
+决策的触发、检索与维护统一见 [decision-notes](../decision-notes/SKILL.md)。本文件只处理已经采用 ADR 的仓库，不新建并行 notes 库。
 
-Create the `docs/adr/` directory lazily: only when the first ADR is needed.
+- 沿用项目已存在的路径、编号和模板；多个 bounded context 时，系统级决定与 context 内决定分别保留在其既有位置。
+- 短 ADR 可以是一段完整的“问题—决定—理由”，不强迫补齐 notes 的所有标题。真实取舍存在时写出被放弃路线及代价。
+- 若仓库按 `0001-slug.md` 编号，分配前检查现有最大值和待提交文件；并行分支合并前重查冲突，不把本机分配当全局锁。
+- 已有状态约定优先：`accepted` 不自动等于已经实施。按该仓库定义区分设计批准和代码落地，必要时单列实施证据。
+- 路径/符号事实变化就地同步；方向或理由翻转写继任 ADR，旧篇标明取代关系，不把旧理由擦掉。
+- 默认保留旧 ADR，不批量改名、搬迁或套用冻结规则。迁移是独立的用户授权任务。
 
-## Template
-
-```md
-# {Short title of the decision}
-
-{1-3 sentences: what's the context, what did we decide, and why.}
-```
-
-That's it. An ADR can be a single paragraph. The value is in recording *that* a decision was made and *why*, not in filling out sections.
-
-## Optional sections
-
-Only include these when they add genuine value. Most ADRs won't need them.
-
-- **Status** frontmatter (`proposed | accepted | deprecated | superseded by ADR-NNNN`): useful when decisions are revisited
-- **Considered Options**: only when the rejected alternatives are worth remembering
-- **Consequences**: only when non-obvious downstream effects need to be called out
-
-## Numbering
-
-Scan `docs/adr/` for the highest existing number and increment by one.
-
-## When to offer an ADR
-
-All three of these must be true:
-
-1. **Hard to reverse**: the cost of changing your mind later is meaningful
-2. **Surprising without context**: a future reader will look at the code and wonder "why on earth did they do it this way?"
-3. **The result of a real trade-off**: there were genuine alternatives and you picked one for specific reasons
-
-If a decision is easy to reverse, skip it: you'll just reverse it. If it's not surprising, nobody will wonder why. If there was no real alternative, there's nothing to record beyond "we did the obvious thing."
-
-### What qualifies
-
-- **Architectural shape.** "We're using a monorepo." "The write model is event-sourced, the read model is projected into Postgres."
-- **Integration patterns between contexts.** "Ordering and Billing communicate via domain events, not synchronous HTTP."
-- **Technology choices that carry lock-in.** Database, message bus, auth provider, deployment target. Not every library: just the ones that would take a quarter to swap out.
-- **Boundary and scope decisions.** "Customer data is owned by the Customer context; other contexts reference it by ID only." The explicit no-s are as valuable as the yes-s.
-- **Deliberate deviations from the obvious path.** "We're using manual SQL instead of an ORM because X." Anything where a reasonable reader would assume the opposite. These stop the next engineer from "fixing" something that was deliberate.
-- **Constraints not visible in the code.** "We can't use AWS because of compliance requirements." "Response times must be under 200ms because of the partner API contract."
-- **Rejected alternatives when the rejection is non-obvious.** If you considered GraphQL and picked REST for subtle reasons, record it; otherwise someone will suggest GraphQL again in six months.
+验收：未来读者可从该记录找到当前决定、理由、真实取舍及其后续取代关系；同一理由没有第二份独立维护的正文。

@@ -5,9 +5,9 @@ description: Diagnosis loop for hard bugs and performance regressions. Use when 
 
 # Diagnosing Bugs
 
-A discipline for hard bugs. Skip phases only when explicitly justified.
+A discipline for hard bugs. For a clear local fix, keep one red-to-green reproduction and the cleanup gate; skip hypothesis ranking and extensive minimisation with an explicit reason. Hard, cross-module, intermittent or performance failures use the full loop.
 
-When exploring the codebase, read `CONTEXT.md` (if it exists) to get a clear mental model of the relevant modules, and check ADRs in the area you're touching.
+When exploring, read `CONTEXT.md` if present and discover relevant ADRs/Notes through [decision-notes](../decision-notes/SKILL.md). Existing constraints and rejected approaches narrow the investigation. Reading history does not require creating a record.
 
 ## Redact
 
@@ -105,9 +105,9 @@ Tool preference:
 
 1. **Debugger / REPL inspection** if the env supports it. One breakpoint beats ten logs.
 2. **Targeted logs** at the boundaries that distinguish hypotheses.
-3. Never "log everything and grep".
+3. Search narrowly with `rg`; collect only evidence that distinguishes hypotheses.
 
-**Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single grep. Untagged logs survive; tagged logs die.
+**Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single `rg` search. Untagged logs survive; tagged logs die.
 
 **Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, `performance.now()`, profiler, query plan), then bisect. Measure first, fix second.
 
@@ -133,6 +133,9 @@ Required before declaring done:
 
 - [ ] Original repro no longer reproduces (re-run the Phase 1 loop)
 - [ ] Regression test passes (or absence of seam is documented)
-- [ ] All `[DEBUG-...]` instrumentation removed (`grep` the prefix)
+- [ ] All `[DEBUG-...]` instrumentation removed (`rg` the prefix)
 - [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
-- [ ] The hypothesis that turned out correct is stated in the commit / PR message, so the next debugger learns
+- [ ] State the confirmed cause and actual verification commands/results. For a durable constraint, recurring failure or non-obvious workaround, update/create the owning [decision record](../decision-notes/SKILL.md) with the cause, regression surface and any missing test seam; PR/task text links to it. A trivial fix needs no new Note.
+- [ ] No automatic Git commit or external publication: hand off to [committing-changes](../committing-changes/SKILL.md) only when the user requests a commit. Keep sensitive artifacts out of records.
+
+Script paths such as `scripts/hitl-loop.template.sh` resolve from this skill directory, not cwd. Tool and delegation adaptation: [pi runtime](../_maintenance/PI-RUNTIME.md).

@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+from workspace_paths import WORKSPACE_ROOT as ROOT_DIR
 ORIGIN_DIR = ROOT_DIR / "origin"
 CHAT_UPLOADS_DIR = ORIGIN_DIR / "chat-uploads"
 SUPPORTED_MANAGED_SOURCE_SUFFIXES = {".txt", ".docx"}

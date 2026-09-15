@@ -39,23 +39,33 @@ struct ModelConfig {
     prompt_profile: String,
 }
 
-fn workspace_root() -> Result<PathBuf, String> {
-    let current_dir = std::env::current_dir().map_err(|error| error.to_string())?;
-    if current_dir.ends_with("app") {
-        current_dir.parent().map(Path::to_path_buf).ok_or_else(|| "Cannot resolve workspace root".to_string())
-    } else if current_dir.ends_with(Path::new("app").join("src-tauri")) {
-        current_dir
-            .parent()
-            .and_then(Path::parent)
-            .map(Path::to_path_buf)
-            .ok_or_else(|| "Cannot resolve workspace root".to_string())
-    } else {
-        Ok(current_dir)
+fn resource_root() -> Result<PathBuf, String> {
+    let root = std::env::var_os("BAIBAI_RESOURCE_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."));
+    let root = root.canonicalize().map_err(|error| error.to_string())?;
+    if !root.join("scripts/app_service.py").is_file() {
+        return Err("Set BAIBAI_RESOURCE_ROOT to the installed skill resource directory".to_string());
     }
+    Ok(root)
+}
+
+fn workspace_root() -> Result<PathBuf, String> {
+    if let Some(root) = std::env::var_os("BAIBAI_WORKSPACE_ROOT") {
+        let root = PathBuf::from(root).canonicalize().map_err(|error| error.to_string())?;
+        if !root.is_dir() { return Err("BAIBAI_WORKSPACE_ROOT must be a directory".to_string()); }
+        return Ok(root);
+    }
+    let cwd = std::env::current_dir().map_err(|error| error.to_string())?
+        .canonicalize().map_err(|error| error.to_string())?;
+    if cwd.starts_with(resource_root()?) {
+        return Err("Set BAIBAI_WORKSPACE_ROOT before starting the desktop app; data must not default to the installation".to_string());
+    }
+    Ok(cwd)
 }
 
 fn script_path(root: &Path, relative_path: &str) -> String {
-    root.join(relative_path).to_string_lossy().replace('\\', "\\\\")
+    serde_json::to_string(&root.join(relative_path).to_string_lossy()).expect("path string serialization")
 }
 
 fn python_executable(root: &Path) -> PathBuf {
@@ -68,12 +78,14 @@ fn python_executable(root: &Path) -> PathBuf {
 
 fn run_python_json(args: &[String]) -> Result<String, String> {
     let root = workspace_root()?;
-    let python = python_executable(&root);
+    let resources = resource_root()?;
+    let python = python_executable(&resources);
     let mut command = Command::new(python);
     command.current_dir(&root);
+    command.env("BAIBAI_WORKSPACE_ROOT", &root);
     command.env("PYTHONIOENCODING", "utf-8");
     command.env("PYTHONUTF8", "1");
-    command.arg("scripts/app_service.py");
+    command.arg(resources.join("scripts/app_service.py"));
     for arg in args {
         command.arg(arg);
     }
@@ -89,12 +101,14 @@ fn run_python_json(args: &[String]) -> Result<String, String> {
 
 fn run_python_json_streaming(window: Window, args: &[String]) -> Result<serde_json::Value, String> {
     let root = workspace_root()?;
-    let python = python_executable(&root);
+    let resources = resource_root()?;
+    let python = python_executable(&resources);
     let mut command = Command::new(python);
     command.current_dir(&root);
+    command.env("BAIBAI_WORKSPACE_ROOT", &root);
     command.env("PYTHONIOENCODING", "utf-8");
     command.env("PYTHONUTF8", "1");
-    command.arg("scripts/app_service.py");
+    command.arg(resources.join("scripts/app_service.py"));
     for arg in args {
         command.arg(arg);
     }
@@ -167,9 +181,12 @@ fn run_python_json_streaming(window: Window, args: &[String]) -> Result<serde_js
 
 fn run_python_inline(code: &str) -> Result<String, String> {
     let root = workspace_root()?;
-    let python = python_executable(&root);
+    let resources = resource_root()?;
+    let python = python_executable(&resources);
     let output = Command::new(python)
         .current_dir(&root)
+        .env("BAIBAI_WORKSPACE_ROOT", &root)
+        .env("PYTHONPATH", resources.join("scripts"))
         .env("PYTHONIOENCODING", "utf-8")
         .env("PYTHONUTF8", "1")
         .arg("-c")
@@ -188,10 +205,10 @@ fn run_python_inline(code: &str) -> Result<String, String> {
 #[tauri::command]
 async fn load_model_config() -> Result<ModelConfig, String> {
     spawn_blocking(move || {
-        let root = workspace_root()?;
+        let root = resource_root()?;
         let output = run_python_inline(
             &format!(
-                "import json, runpy; module = runpy.run_path(r'{}'); print(json.dumps(module['load_app_config'](), ensure_ascii=False))",
+                "import json, runpy; module = runpy.run_path({}); print(json.dumps(module['load_app_config'](), ensure_ascii=False))",
                 script_path(&root, "scripts/app_config.py")
             ),
         )?;
@@ -204,12 +221,13 @@ async fn load_model_config() -> Result<ModelConfig, String> {
 #[tauri::command]
 async fn save_model_config(config: ModelConfig) -> Result<ModelConfig, String> {
     spawn_blocking(move || {
-        let root = workspace_root()?;
+        let root = resource_root()?;
         let config_json = serde_json::to_string(&config).map_err(|error| error.to_string())?;
+        let quoted_json = serde_json::to_string(&config_json).map_err(|error| error.to_string())?;
         let output = run_python_inline(&format!(
-            "import json, runpy; module = runpy.run_path(r'{}'); print(json.dumps(module['save_app_config'](json.loads(r'''{}''')), ensure_ascii=False))",
+            "import json, runpy; module = runpy.run_path({}); print(json.dumps(module['save_app_config'](json.loads({})), ensure_ascii=False))",
             script_path(&root, "scripts/app_config.py"),
-            config_json
+            quoted_json
         ))?;
         serde_json::from_str(&output).map_err(|error| error.to_string())
     })

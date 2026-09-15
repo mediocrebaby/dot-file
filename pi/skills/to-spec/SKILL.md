@@ -1,12 +1,12 @@
 ---
 name: to-spec
-description: "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed."
+description: "将已确认讨论整理为本地 spec；明确授权后可发布到已有 tracker，不重新进行完整访谈。"
 disable-model-invocation: true
 ---
 
 This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
 
-The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
+Discover the existing tracker and labels using [tracker adaptation](../wayfinder/references/tracker.md). With no tracker, write a local `.scratch/<effort>/spec.md`. External publication requires authorization; a draft is not a published issue. Use [pi runtime](../_maintenance/PI-RUNTIME.md) for tools and paths.
 
 ## Process
 
@@ -14,9 +14,9 @@ The issue tracker and triage label vocabulary should have been provided to you. 
 
 2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
 
-Check with the user that these seams match their expectations.
+Reuse already confirmed test boundaries. Ask only if a material unresolved choice blocks the spec; otherwise mark uncertainty explicitly rather than starting a new interview.
 
-3. Write the spec using the template below, then publish it to the project issue tracker. Apply the `ready-for-agent` triage label - no need for additional triage.
+3. Write the spec using the template below. Publish only to the authorized tracker with its existing labels, or deliver the local file path. Link durable confirmed choices to [decision-notes](../decision-notes/SKILL.md); the spec describes requested behavior, not proof of implementation.
 
 <spec-template>
 
@@ -30,7 +30,7 @@ The solution to the problem, from the user's perspective.
 
 ## User Stories
 
-A LONG, numbered list of user stories. Each user story should be in the format of:
+A numbered list of distinct, relevant user stories. Each user story should be in the format of:
 
 1. As an <actor>, I want a <feature>, so that <benefit>
 
@@ -38,11 +38,11 @@ A LONG, numbered list of user stories. Each user story should be in the format o
 1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
 </user-story-example>
 
-This list of user stories should be extremely extensive and cover all aspects of the feature.
+Cover the agreed scope and important edge cases without inventing requirements or padding the list.
 
 ## Implementation Decisions
 
-A list of implementation decisions that were made. This can include:
+A list of confirmed implementation choices, linking their owning ADR/Note rather than duplicating the full rationale. Unconfirmed choices stay explicitly open. This can include:
 
 - The modules that will be built/modified
 - The interfaces of those modules that will be modified

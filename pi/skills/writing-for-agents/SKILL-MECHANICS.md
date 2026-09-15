@@ -1,22 +1,26 @@
-# Skill mechanics
+# pi 中的 skill 机制
 
-The skill-specific branch of [`writing-for-agents`](SKILL.md): what changes when the document is a skill (frontmatter, the invocation choice, and router skills). Everything else about writing it is the universal reference in `SKILL.md`.
+本文件补充 [writing-for-agents](SKILL.md)。已核对 pi 0.85.1 的 skills 文档和加载实现；升级后通过宿主文档重新核对，不假设跨宿主一致。
 
-## Invocation
+## 发现和调用
 
-Two choices, trading the two loads:
+- skill 入口使用 YAML frontmatter，提供与目录一致的 `name` 和明确的 `description`。
+- 默认入口的 description 进入模型可见列表，触发后用 `read` 按需读取正文。
+- `disable-model-invocation: true` 仅隐藏自动发现描述。入口仍被加载，用户可以 `/skill:<name>` 调用。
+- 隐藏描述不是权限边界：已读 skill 可以通过文件链接引用任何获准读取的文档，包括手动入口。不要写成“其他 skill 绝对无法读取”。
+- 只有需要独立触发的行为才新增默认入口。快捷别名可设为手动入口，实际流程在一个权威 skill 中维护。
+- pi 没有专用 skill 调用工具。跨 skill 组合使用明确的相对 Markdown 链接，读时按包含链接的文件目录解析为绝对路径。
+- `references/`、`templates/`、`scripts/` 不自动加载，用带触发条件的指针下钻。无 SKILL.md 的维护目录不作为嵌套 skill 入口。
+- `/reload` 重载资源；验证行为改动应使用新会话，避免旧正文仍在上下文中。
 
-- A **model-invoked** skill keeps a `description`, so the agent can fire it autonomously, and other skills can reach it. You can still type its name: model-invocation always _includes_ user reach; a description only ever adds agent discovery, never removes the human's. The description is the skill's top-level context pointer, forced to stay loaded at all times: permanent context load in exchange for discoverability. A model-invoked skill whose content is all reference is also one home for shared reference: another skill can invoke it, so reference needed by several skills lives in one place. Mechanics: omit `disable-model-invocation`, and write a model-facing description carrying the trigger branches (the pointer-writing rules in `SKILL.md` apply in full).
-- A **user-invoked** skill strips the description from the agent's reach: only the human typing its name can invoke it, and no other skill can. Zero context load, but it spends cognitive load: you are the index that must remember it exists. Mechanics: set `disable-model-invocation: true`; the `description` becomes human-facing: a one-line summary, trigger lists stripped.
+## 可执行契约
 
-Pick model-invocation only when the agent must reach the skill on its own, or another skill must. If it only ever fires by hand, make it user-invoked and pay no context load.
+创建或修改 skill 时明确：触发与免用场景 → 输入/前置能力 → 主要动作 → 输出位置 → 可检查的完成条件 → 失败/缺依赖时怎么办。
 
-Shared reference that two user-invoked skills both need can live in neither: with no descriptions, neither can fire the other. Push it to a plain file outside the skill system: external reference any skill can point at.
+资源路径相对安装目录，用户数据相对任务工作区。工具名、agent 和依赖需以当前宿主能力为准，不能硬编码别的宿主的设置命令。副作用必须符合用户任务授权，默认不额外提交、推送、发布或删除历史。
 
-## Splitting by invocation
+## 验证
 
-The invocation cut of splitting (the sequence cut lives in `SKILL.md`): split off a model-invoked skill when you have a distinct leading word that should trigger it on its own (a trigger word you actually use in your prompts), or another skill must reach it. You pay context load for the new always-loaded description, so that independent reach has to be worth it.
+结构和资源链接用 [skills doctor](../_maintenance/README.md) 检查。至少补一个应触发和一个应跳过的场景；涉及状态转换、落盘或执行器时补自动化回归。检查器能验证格式与可达性，不能证明模型实际遵循了指令；行为场景需独立运行并记录证据。
 
-## Router skills
-
-When user-invoked skills multiply past what you can remember, that piled-up cognitive load is cured by a **router skill**: one user-invoked skill that names the others and when to reach for each, so the human has one skill to remember instead of many. It can only hint, never fire them: user-invoked skills have no description, so nothing but the human can reach them.
+更具体的工具与路径适配见 [PI-RUNTIME.md](../_maintenance/PI-RUNTIME.md)。

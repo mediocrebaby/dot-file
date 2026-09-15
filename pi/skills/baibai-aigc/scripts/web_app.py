@@ -35,7 +35,7 @@ from managed_sources import (
 )
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+from workspace_paths import WORKSPACE_ROOT as ROOT_DIR
 FINISH_DIR = ROOT_DIR / "finish"
 EXPORT_DIR = FINISH_DIR / "web_exports"
 ALLOWED_WEB_ORIGINS = {
@@ -66,7 +66,7 @@ def error_response(message: str, status: int = 400) -> tuple[Response, int]:
     return jsonify({"message": message}), status
 def _is_within(path: Path, root: Path) -> bool:
     try:
-        path.relative_to(root.resolve())
+        path.resolve().relative_to(root.resolve())
         return True
     except ValueError:
         return False
@@ -91,6 +91,20 @@ def require_managed_output_path(path_value: str) -> str:
     if not _is_within(normalized_path, FINISH_DIR):
         raise ValueError("outputPath must stay within the managed finish directory.")
     return str(normalized_path)
+
+
+def require_managed_execution_options(options: dict[str, Any] | None) -> dict[str, Any] | None:
+    if options is None:
+        return None
+    normalized = dict(options)
+    for field in ("basedOnOutputPath", "basedOnManifestPath"):
+        value = normalized.get(field)
+        if value is None or value == "":
+            continue
+        if not isinstance(value, str):
+            raise ValueError(f"{field} must be a path string.")
+        normalized[field] = require_managed_output_path(value)
+    return normalized
 
 
 def write_uploaded_file(filename: str, content: str) -> Path:
@@ -316,6 +330,7 @@ def post_run_round() -> tuple[Response, int] | Response:
             raise ValueError("modelConfig is required.")
         if execution_options is not None and not isinstance(execution_options, dict):
             raise ValueError("executionOptions must be an object when provided.")
+        execution_options = require_managed_execution_options(execution_options)
         run_id = uuid.uuid4().hex
         RUN_STATES[run_id] = ProgressState()
         worker = threading.Thread(
@@ -344,7 +359,9 @@ def post_request_stop() -> tuple[Response, int] | Response:
 def get_export_round() -> tuple[Response, int] | Response:
     try:
         output_path = require_managed_output_path(require_query_value("outputPath"))
-        target_format = require_query_value("targetFormat")
+        target_format = require_query_value("targetFormat").lower()
+        if target_format not in {"txt", "docx"}:
+            raise ValueError(f"Unsupported export format: {target_format}")
         stem = Path(output_path).stem or "current-round"
         export_path = EXPORT_DIR / f"{stem}.{target_format}"
         result = export_round_output(output_path, str(export_path), target_format)

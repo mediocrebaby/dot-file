@@ -97,12 +97,12 @@ Surface the URL (and the `?variant=` keys). The user will flip through whenever 
 
 ### 6. Capture the answer and clean up
 
-Once a variant has won, capture the answer (which variant and why), then capture the prototype the way the [SKILL](SKILL.md) describes. Fold the winner into the real code and move the rest onto the throwaway branch, not into main:
+Once a variant wins, capture which one and why, its limitations, and the local evidence path following [SKILL.md](SKILL.md). Keep that local artifact by default; branch creation and production promotion need explicit authorization. When the user authorizes production implementation:
 
 - **Sub-shape A**: fold the winner into the existing page; drop the losing variants and the switcher from main.
 - **Sub-shape B**: promote the winning variant to a real route; drop the throwaway route and the switcher from main.
 
-The full set of variants is the primary source, so it lands on the throwaway branch, not the bin, since variant components and the switcher left in the main branch rot fast and confuse the next reader.
+Preserve the full set of variants as a primary source at its documented local path, or on an explicitly authorized throwaway branch. Remove only this task's prototype code after preserving that evidence; do not delete user work or auto-commit to clear the working tree.
 
 ## Anti-patterns
 

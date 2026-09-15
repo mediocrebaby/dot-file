@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable
 
 from aigc_records import ROOT_DIR, update_round
+from workspace_paths import RESOURCE_ROOT
 from chunking import DEFAULT_CHUNK_LIMIT, ChunkManifest, build_manifest, restore_text_from_chunks, save_manifest
 
 
@@ -24,6 +25,7 @@ PROMPT_PROFILE_CHUNK_METRICS = {
 }
 
 MAX_ROUNDS = max(max(rounds) for rounds in PROMPT_PROFILES.values())
+FINISH_DIR = ROOT_DIR / "finish"
 
 
 Transform = Callable[[str, str, int, str], str]
@@ -188,9 +190,17 @@ def detect_disallowed_answer_style_pattern(input_text: str, output_text: str) ->
 
 
 def normalize_path(path: Path) -> Path:
-    if path.is_absolute():
-        return path
-    return (ROOT_DIR / path).resolve()
+    candidate = path if path.is_absolute() else ROOT_DIR / path
+    return candidate.expanduser().resolve()
+
+
+def require_finish_path(path: Path, field: str) -> Path:
+    normalized = normalize_path(path)
+    try:
+        normalized.relative_to(FINISH_DIR.resolve())
+    except ValueError as exc:
+        raise ValueError(f"{field} must stay within the workspace finish directory.") from exc
+    return normalized
 
 
 def relative_to_root(path: Path) -> str:
@@ -230,7 +240,7 @@ def load_prompt(prompt_profile: str | None, round_number: int) -> str:
             f"Round {round_number} is not available for prompt profile {normalize_prompt_profile(prompt_profile)}. "
             f"Supported rounds: {sorted(prompts)}"
         )
-    prompt_path = ROOT_DIR / prompts[round_number]
+    prompt_path = RESOURCE_ROOT / prompts[round_number]
     return prompt_path.read_text(encoding="utf-8")
 
 
@@ -601,8 +611,8 @@ def run_round(
     based_on_manifest_path: str | None = None,
 ) -> dict:
     normalized_input_path = normalize_path(input_path)
-    normalized_output_path = normalize_path(output_path)
-    normalized_manifest_path = normalize_path(manifest_path)
+    normalized_output_path = require_finish_path(output_path, "outputPath")
+    normalized_manifest_path = require_finish_path(manifest_path, "manifestPath")
     normalized_progress_path = build_progress_path(normalized_manifest_path)
     normalized_stop_request_path = build_stop_request_path(normalized_manifest_path)
     normalized_prompt_profile = normalize_prompt_profile(prompt_profile)

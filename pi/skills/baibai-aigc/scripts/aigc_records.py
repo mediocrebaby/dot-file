@@ -52,8 +52,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Paths are computed relative to this file: scripts/ -> workspace root.
-ROOT_DIR = Path(__file__).resolve().parents[1]
+# Keep ROOT_DIR as a compatibility alias for existing data-path callers.
+from workspace_paths import WORKSPACE_ROOT as ROOT_DIR
 FINISH_DIR = ROOT_DIR / "finish"
 RECORDS_PATH = FINISH_DIR / "aigc_records.json"
 VALID_RECORD_STATUSES = {"in_progress", "interrupted", "completed"}

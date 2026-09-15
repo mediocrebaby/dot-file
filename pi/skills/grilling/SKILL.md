@@ -23,6 +23,8 @@ Format a round like so:
 
 Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
 
-Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
+Finding _facts_ is your job. Look up small facts directly. For substantial independent exploration, use an available read-only agent following [pi runtime](../_maintenance/PI-RUNTIME.md); if unavailable, investigate locally. A running exploration is an unsettled prerequisite: ask independent frontier questions now, but wait for its results before settling dependent decisions. The _decisions_ are the user's: put each to them and wait.
 
-The session is done when the frontier is empty: every branch of the design tree visited, nothing left silently assumed. Do not act on it until the user confirms you have reached a shared understanding.
+The session is done when the in-scope frontier is empty: every relevant branch is settled or explicitly deferred with an owner/condition. Summarize the decisions, assumptions and deferred questions for user confirmation before implementation. Do not reopen already confirmed choices merely to repeat a checkpoint.
+
+When recording is requested or authorized by the surrounding task, pass durable confirmed decisions to [decision-notes](../decision-notes/SKILL.md); unconfirmed choices remain proposals. Pure interviewing does not silently create files.

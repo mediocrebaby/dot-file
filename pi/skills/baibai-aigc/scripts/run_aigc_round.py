@@ -5,8 +5,8 @@ import json
 from pathlib import Path
 from typing import Callable, Sequence
 
-from chunking import DEFAULT_CHUNK_LIMIT
-from aigc_round_service import MAX_ROUNDS, build_prompt_input, load_prompt, run_round
+from chunking import DEFAULT_CHUNK_LIMIT, build_manifest
+from aigc_round_service import MAX_ROUNDS, build_prompt_input, get_chunk_metric, load_prompt, normalize_path, run_round
 from llm_client import llm_completion, read_api_config
 
 
@@ -57,7 +57,7 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Build chunks and prompt inputs without calling the model. Output text will match input text.",
+        help="Preview chunks and prompts as JSON only; never call the API, write output files, or complete a round.",
     )
     return parser
 
@@ -66,6 +66,28 @@ def main(argv: Sequence[str] | None = None) -> None:
     parser = _build_parser()
     args = parser.parse_args(argv)
     debug_payload: dict[str, str] = {}
+    if args.dry_run:
+        # This branch takes precedence even when complete API credentials exist.
+        prompt_text = load_prompt(args.prompt_profile, args.round)
+        source = normalize_path(args.input_path)
+        manifest = build_manifest(source.read_text(encoding="utf-8"), chunk_limit=args.chunk_limit, chunk_metric=get_chunk_metric(args.prompt_profile))
+        preview = {
+            "dry_run": True,
+            "round": args.round,
+            "prompt_profile": args.prompt_profile,
+            "input_path": str(source),
+            "paragraph_count": manifest.paragraph_count,
+            "chunk_count": manifest.chunk_count,
+            "files_written": [],
+            "records_updated": False,
+        }
+        if args.echo_prompt_inputs:
+            preview["prompt_inputs"] = {
+                c.chunk_id: build_prompt_input(prompt_text, c.text, args.round, c.chunk_id)
+                for c in manifest.chunks
+            }
+        print(json.dumps(preview, ensure_ascii=False, indent=2))
+        return
     resolved_api_key, resolved_model, resolved_base_url, resolved_api_type = read_api_config(
         args.api_key,
         args.model,
@@ -83,9 +105,6 @@ def main(argv: Sequence[str] | None = None) -> None:
         )
     elif args.api_key or args.model or args.base_url or args.api_type:
         parser.error("API mode requires api_key, model, and base_url together, either by args or environment variables.")
-    elif args.dry_run:
-        def base_transform(chunk_text: str, _: str, __: int, ___: str) -> str:
-            return chunk_text
     else:
         parser.error("No API configuration found. Provide api_key, model, and base_url, or use --dry-run for chunk verification only.")
 

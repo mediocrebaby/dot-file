@@ -1,10 +1,23 @@
 param(
-    [switch]$SkipInstall
+    [switch]$SkipInstall,
+    [string]$Workspace = $env:BAIBAI_WORKSPACE_ROOT
 )
 
 $ErrorActionPreference = "Stop"
 
-$rootDir = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$rootDir = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+if (-not $Workspace) {
+    $Workspace = (Get-Location).Path
+    if ($Workspace -eq $rootDir -or $Workspace.StartsWith($rootDir + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Pass -Workspace <existing user project directory>; data must not default to the skill installation."
+    }
+}
+$workspaceDir = (Resolve-Path -LiteralPath $Workspace).Path
+if (-not (Test-Path -LiteralPath $workspaceDir -PathType Container)) { throw "Workspace must be a directory." }
+$env:BAIBAI_WORKSPACE_ROOT = $workspaceDir
+# Escape PowerShell string literals used in the child shell commands.
+$quotedWorkspace = $workspaceDir.Replace("'", "''")
+$quotedRoot = $rootDir.Replace("'", "''")
 $appDir = Join-Path $rootDir "app"
 $venvDir = Join-Path $rootDir ".venv"
 $venvPython = Join-Path $venvDir "Scripts\python.exe"
@@ -20,7 +33,7 @@ function Test-PythonCommand {
 }
 
 function Ensure-Venv {
-    if (Test-Path $venvPython) {
+    if (Test-Path -LiteralPath $venvPython) {
         return
     }
 
@@ -46,7 +59,7 @@ function Install-BackendDependencies {
 
 function Install-FrontendDependencies {
     Write-Host "Installing frontend dependencies ..."
-    Push-Location $appDir
+    Push-Location -LiteralPath $appDir
     try {
         npm install
     }
@@ -72,23 +85,28 @@ function Start-ServiceWindow {
     Write-Host "$Title started."
 }
 
-Ensure-Venv
-
 if (-not $SkipInstall) {
+    Ensure-Venv
     Install-BackendDependencies
     Install-FrontendDependencies
 }
+elseif (-not (Test-Path -LiteralPath $venvPython)) {
+    throw "No existing virtual environment. Run without -SkipInstall only after approving dependency installation."
+}
 
+$quotedPython = $venvPython.Replace("'", "''")
+$quotedApp = $appDir.Replace("'", "''")
+$quotedActivate = $venvActivate.Replace("'", "''")
 $backendCommand = @"
-Set-Location '$rootDir'
+Set-Location -LiteralPath '$quotedWorkspace'
 Write-Host 'Starting backend on http://127.0.0.1:8765'
-& '$venvPython' 'scripts/web_app.py'
+& '$quotedPython' '$quotedRoot/scripts/web_app.py'
 "@
 
 $frontendCommand = @"
-Set-Location '$appDir'
-if (Test-Path '$venvActivate') {
-    Write-Host 'Using Python virtual environment from $venvDir'
+Set-Location -LiteralPath '$quotedApp'
+if (Test-Path -LiteralPath '$quotedActivate') {
+    Write-Host 'Using the skill virtual environment'
 }
 Write-Host 'Starting frontend on http://127.0.0.1:1420'
 npm run dev:web
@@ -102,4 +120,4 @@ Write-Host "Web backend:  http://127.0.0.1:8765"
 Write-Host "Web frontend: http://127.0.0.1:1420"
 Write-Host ""
 Write-Host "If dependencies are already installed, run:"
-Write-Host "powershell -ExecutionPolicy Bypass -File .\scripts\start_web_dev.ps1 -SkipInstall"
+Write-Host "Pass -Workspace <your-data-directory> -SkipInstall to reuse existing dependencies."

@@ -20,7 +20,8 @@ from docx_pipeline import read_docx_text
 
 Transform = Callable[[str, str, int, str], str]
 ProgressCallback = Callable[[dict[str, object]], None]
-INTERMEDIATE_DIR = ROOT_DIR / "finish" / "intermediate"
+FINISH_DIR = ROOT_DIR / "finish"
+INTERMEDIATE_DIR = FINISH_DIR / "intermediate"
 
 
 @dataclass
@@ -151,6 +152,33 @@ def build_round_context(source_path: Path | str, round_number: int | None = None
     )
 
 
+def _require_context_path(path: Path | str, root: Path, field: str) -> Path:
+    normalized = normalize_path(Path(path))
+    resolved_root = root.resolve()
+    try:
+        normalized.relative_to(resolved_root)
+    except ValueError as exc:
+        scope = "root" if resolved_root == ROOT_DIR.resolve() else root.name
+        raise ValueError(f"{field} must stay within the workspace {scope} directory.") from exc
+    return normalized
+
+
+def validate_execution_context(context: RoundContext) -> RoundContext:
+    context.output_text_path = _require_context_path(context.output_text_path, FINISH_DIR, "outputPath")
+    context.manifest_path = _require_context_path(context.manifest_path, FINISH_DIR, "manifestPath")
+    if context.based_on_output_path:
+        based_on_output = _require_context_path(context.based_on_output_path, FINISH_DIR, "basedOnOutputPath")
+        context.based_on_output_path = str(based_on_output)
+        context.input_text_path = based_on_output
+    elif context.round_number > 1 or context.extracted_from_docx:
+        context.input_text_path = _require_context_path(context.input_text_path, FINISH_DIR, "inputPath")
+    if context.based_on_manifest_path:
+        context.based_on_manifest_path = str(
+            _require_context_path(context.based_on_manifest_path, FINISH_DIR, "basedOnManifestPath")
+        )
+    return context
+
+
 def build_execution_context(
     source_path: Path | str,
     round_number: int | None = None,
@@ -158,16 +186,18 @@ def build_execution_context(
     execution_options: dict | None = None,
 ) -> RoundContext:
     if not execution_options or not execution_options.get("applyMode"):
-        return _build_round_context_with_resume(
+        context = _build_round_context_with_resume(
             source_path,
             round_number=round_number,
             prompt_profile=prompt_profile,
         )
-    return _build_targeted_context(
-        source_path,
-        prompt_profile=prompt_profile,
-        execution_options=execution_options,
-    )
+    else:
+        context = _build_targeted_context(
+            source_path,
+            prompt_profile=prompt_profile,
+            execution_options=execution_options,
+        )
+    return validate_execution_context(context)
 
 
 def ensure_skill_input_text(source_path: Path | str) -> tuple[Path, bool]:
