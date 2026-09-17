@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import {
   buildAuthHeaders,
   getQoderBaseUrl,
+  getQoderCNDirectModel,
   getQoderCNFriendlyModelInfo,
   getQoderMode,
   getQoderModelListURL,
@@ -22,7 +23,7 @@ export interface QoderModelEntry {
   context_config?: Record<string, { token_count?: number }>;
   is_vl?: boolean;
   is_reasoning?: boolean;
-  thinking_config?: { enabled?: { efforts?: unknown } };
+  thinking_config?: { enabled?: { efforts?: unknown; is_default?: boolean } };
   source?: string;
   [key: string]: unknown;
 }
@@ -296,6 +297,34 @@ export const staticCnModels: QoderModelDef[] = [
     description: "Qoder CN dfmodel; context options 200K/400K/1M.",
   },
   {
+    id: "glm-5.3",
+    name: "GLM 5.3 · Qoder CN",
+    api: "qoder-api",
+    provider: "qoder-cn",
+    baseUrl: getQoderBaseUrl("cn"),
+    reasoning: true,
+    supportsEffort: true,
+    input: ["text", "image"],
+    cost: ZERO_COST,
+    contextWindow: 1000000,
+    maxTokens: 32768,
+    description: "Qoder CN gmodel; context options 200K/400K/1M.",
+  },
+  {
+    id: "kimi-k3",
+    name: "Kimi K3 · Qoder CN",
+    api: "qoder-api",
+    provider: "qoder-cn",
+    baseUrl: getQoderBaseUrl("cn"),
+    reasoning: true,
+    supportsEffort: true,
+    input: ["text", "image"],
+    cost: ZERO_COST,
+    contextWindow: 1000000,
+    maxTokens: 32768,
+    description: "Qoder CN kmodel_latest; thinking enabled; context options 200K/400K/1M.",
+  },
+  {
     id: "glm-5.2",
     name: "GLM 5.2 · Qoder CN",
     api: "qoder-api",
@@ -364,6 +393,20 @@ export function getCachedModelConfig(modelKey: string, mode?: string): QoderMode
   }
 
   if (isQoderCNMode(mode)) {
+    const directKey = getQoderCNDirectModel(modelKey);
+    if (directKey === "gmodel" || directKey === "kmodel_latest") {
+      // Mirror the CN catalog: Kimi K3 has thinking_config despite is_reasoning=false.
+      return {
+        key: directKey,
+        is_reasoning: directKey === "gmodel",
+        is_vl: true,
+        thinking_config: {
+          enabled: { efforts: { high: {}, low: {}, max: { is_default: true } }, is_default: true },
+        },
+        max_output_tokens: 32768,
+        source: "system",
+      };
+    }
     const reasoningModels = new Set([
       "qoder-cn",
       "auto",

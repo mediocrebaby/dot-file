@@ -118,12 +118,20 @@ internal keys at request time:
 | `qwen3.6-flash` | `q36fmodel` | 1M | ❌ | ✅ |
 | `deepseek-v4-pro` | `dmodel` | 1M | ❌ | ✅ |
 | `deepseek-v4-flash` | `dfmodel` | 1M | ❌ | ❌ |
+| `glm-5.3` | `gmodel` | 1M | ✅ | ✅ |
 | `glm-5.2` | `gm51model` | 200K | ✅ | ✅ |
+| `kimi-k3` | `kmodel_latest` | 1M | ✅ | ✅ |
 | `kimi-k2.6` | `kmodel` | 256K | ✅ | ✅ |
 | `minimax-m2.7` | `mmodel` | 200K | ❌ | ❌ |
 
 Compatibility aliases are also accepted for request mapping, such as
 `qwen3.6-plus` → `qmodel`, `glm-5.1` → `gm51model`, and `minimax-m3` → `mmodel`.
+
+GLM 5.3 and Kimi K3 are separate CN models; their mappings do not replace the
+older GLM/Kimi keys. Both advertise thinking efforts (`low`, `high`, `max`) and
+200K/400K/1M context options in the CN catalog. Kimi K3 exposes thinking through
+`thinking_config` even though its raw `is_reasoning` flag is false. Live catalog
+limits take precedence; the static output-token fallback is 32,768.
 
 ## Usage
 
