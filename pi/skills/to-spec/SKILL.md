@@ -1,75 +1,42 @@
 ---
 name: to-spec
-description: "将已确认讨论整理为本地 spec；明确授权后可发布到已有 tracker，不重新进行完整访谈。"
+description: 将已确认讨论整理为可验收的 spec；优先沿用项目格式与本地交付，不重新完整访谈，外部发布另需授权。
 disable-model-invocation: true
 ---
 
-This skill takes the current conversation context and codebase understanding and produces a spec. Do NOT interview the user; just synthesize what you already know.
+# 将讨论整理为规格
 
-Discover the existing tracker and labels using [tracker adaptation](../wayfinder/references/tracker.md). With no tracker, write a local `.scratch/<effort>/spec.md`. External publication requires authorization; a draft is not a published issue. Use [pi runtime](../_maintenance/PI-RUNTIME.md) for tools and paths.
+从已有上下文提炼约定的行为、范围和验收方式，不重新设计产品。用户尚未确定目标时，说明缺口；只有阻止成稿的关键选择才追问，其余标为待定。
 
-## Process
+## 1. 确定来源与去向
 
-1. Explore the repo to understand the current state of the codebase, if you haven't already. Use the project's domain glossary vocabulary throughout the spec, and respect any ADRs in the area you're touching.
+复用已经核实的讨论与代码结论，只查缺少的相关事实。沿用项目术语及既有 ADR/Notes，不为写 spec 全库扫描或启动领域建模。
 
-2. Sketch out the seams at which you're going to test the feature. Existing seams should be preferred to new ones. Use the highest seam possible. If new seams are needed, propose them at the highest point you can. The fewer seams across the codebase, the better - the ideal number is one.
+优先遵循用户指定的格式、路径和交付方式；只要聊天正文就不写文件。文件交付沿用项目已有 spec 位置；没有约定时使用 `.scratch/<effort>/spec.md`。写前检查是否已存在：同一主题在本任务授权内更新，不覆盖不相关内容或未经确认的用户草稿。
 
-Reuse already confirmed test boundaries. Ask only if a material unresolved choice blocks the spec; otherwise mark uncertainty explicitly rather than starting a new interview.
+仅当用户指定 tracker 或授权发布时读取 [tracker 适配](../wayfinder/references/tracker.md)，发现实际平台与标签。默认本地草稿不探测外部 tracker；未授权或工具缺失就交付草稿，不声称已发布。调用工具与资源路径见 [pi 宿主适配](../_maintenance/PI-RUNTIME.md)。
 
-3. Write the spec using the template below. Publish only to the authorized tracker with its existing labels, or deliver the local file path. Link durable confirmed choices to [decision-notes](../decision-notes/SKILL.md); the spec describes requested behavior, not proof of implementation.
+## 2. 提炼规格
 
-<spec-template>
+沿用宿主模板及其必需标题；没有模板时使用以下最小结构，内容为空且非必需的章节可省略：
 
-## Problem Statement
+| 内容 | 应写什么 |
+|---|---|
+| 问题与目标 | 用户遇到的问题及完成后的可观察变化 |
+| 范围与行为 | 已确认的用户场景、边界情况、错误行为；需要时用用户故事，不强制句式 |
+| 验收标准 | 可观察或可运行的成功条件，明确它验证哪个行为 |
+| 已确认决定 | 必要的接口、数据契约、约束；理由链接到其归属 ADR/Note |
+| 验证方案 | 如何检查验收条件，已有测试边界与参考；计划和已运行结果分开 |
+| 非目标与待定 | 明确排除项、未确认选择及其阻塞影响 |
 
-The problem that the user is facing, from the user's perspective.
+测试边界应能覆盖真实行为并便于定位问题，优先复用现有边界；按风险结合单元、集成或端到端检查，不追求“最高层”或“只能一个边界”。复用已确认的测试选择，不借写 spec 擅自决定架构。
 
-## Solution
+正文按行为组织；需要定位证据或精确定义契约时，可以保留必要路径、符号和小段代码，说明它是当前事实、已确认契约还是原型证据。原型片段不等于生产实现。避免复制随实现易失真的文件清单和完整演示。
 
-The solution to the problem, from the user's perspective.
+持久决定遵循 [decision-notes](../decision-notes/SKILL.md)，spec 链接其正文，不重复维护理由。没有真正新增决定时不为套模板另建记录。
 
-## User Stories
+## 3. 核对并交付
 
-A numbered list of distinct, relevant user stories. Each user story should be in the format of:
+完成条件：范围内的重要行为有验收条件，未确认项显式标记，未添加未经约定的需求，证据与实施状态没有混淆。信息不足时交付标注缺口的草稿，不把它描述为已确认规格。
 
-1. As an <actor>, I want a <feature>, so that <benefit>
-
-<user-story-example>
-1. As a mobile bank customer, I want to see balance on my accounts, so that I can make better informed decisions about my spending
-</user-story-example>
-
-Cover the agreed scope and important edge cases without inventing requirements or padding the list.
-
-## Implementation Decisions
-
-A list of confirmed implementation choices, linking their owning ADR/Note rather than duplicating the full rationale. Unconfirmed choices stay explicitly open. This can include:
-
-- The modules that will be built/modified
-- The interfaces of those modules that will be modified
-- Technical clarifications from the developer
-- Architectural decisions
-- Schema changes
-- API contracts
-- Specific interactions
-
-Do NOT include specific file paths or code snippets. They may end up being outdated very quickly.
-
-Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it within the relevant decision and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
-
-## Testing Decisions
-
-A list of testing decisions that were made. Include:
-
-- A description of what makes a good test (only test external behavior, not implementation details)
-- Which modules will be tested
-- Prior art for the tests (i.e. similar types of tests in the codebase)
-
-## Out of Scope
-
-A description of the things that are out of scope for this spec.
-
-## Further Notes
-
-Any further notes about the feature.
-
-</spec-template>
+报告正文或实际文件路径；只有真实发布成功才附外部标识。整理规格不授权实施代码、拆票、提交 Git 或关闭 Issue。

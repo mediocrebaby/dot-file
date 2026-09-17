@@ -1,6 +1,6 @@
 ---
 name: domain-modeling
-description: Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR.
+description: 澄清或修改领域术语、概念边界与关系，维护 CONTEXT.md 词汇表；仅阅读术语表或编辑不涉及领域模型的 ADR 不触发。
 ---
 
 # Domain Modeling
@@ -37,7 +37,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily and only within the task's authorized writing scope. If no `CONTEXT.md` exists, create it when the first term is resolved. The trees above illustrate existing ADR layouts, not a command to create a second decision store. Before recording a decision, read [decision-notes](../decision-notes/SKILL.md), discover the project's existing ADR/notes location, and use that single authority.
+Create or edit files only within the task's authorized writing scope. Discussion or read-only clarification does not authorize writing: return suggested glossary changes instead. Within an authorized documentation task, create `CONTEXT.md` lazily when the first term is resolved. The trees above illustrate existing ADR layouts, not a command to create a second decision store. Before recording a decision, read [decision-notes](../decision-notes/SKILL.md), discover the project's existing ADR/notes location, and use that single authority.
 
 ## During the session
 
@@ -59,7 +59,7 @@ When the user states how something works, check whether the code agrees. If you 
 
 ### Update CONTEXT.md inline
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up: capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When a term is resolved and writing is authorized, update `CONTEXT.md` in the same task. Otherwise present the proposed entry without editing files. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 

@@ -36,6 +36,60 @@ def outside_fences(text):
     return "\n".join(lines)
 
 
+def check_behavior_cases(path, names):
+    """Validate case shape and entry coverage, not instruction semantics."""
+    try:
+        cases = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return [f"{path.name}: cannot read cases: {exc}"]
+    if not isinstance(cases, list):
+        return [f"{path.name}: root must be a list"]
+
+    errors, seen = [], set()
+
+    def check_strings(item, fields, location):
+        for field in fields:
+            value = item.get(field)
+            if not isinstance(value, str) or not value.strip():
+                errors.append(f"{location}.{field}: must be a nonempty string")
+
+    for index, item in enumerate(cases):
+        location = f"{path.name}[{index}]"
+        if not isinstance(item, dict):
+            errors.append(f"{location}: must be an object")
+            continue
+        fields = {"skill", "trigger", "skip", "expected", "must_not"}
+        for field in item.keys() - fields - {"additional_cases"}:
+            errors.append(f"{location}: unknown field {field}")
+        check_strings(item, sorted(fields), location)
+        name = item.get("skill")
+        if isinstance(name, str) and name.strip():
+            if name not in names:
+                errors.append(f"{location}.skill: unknown skill {name!r}")
+            if name in seen:
+                errors.append(f"{location}.skill: duplicate primary case for {name!r}")
+            seen.add(name)
+        if "additional_cases" not in item:
+            continue
+        branches = item["additional_cases"]
+        if not isinstance(branches, list):
+            errors.append(f"{location}.additional_cases: must be a list")
+            continue
+        for branch_index, branch in enumerate(branches):
+            branch_location = f"{location}.additional_cases[{branch_index}]"
+            if not isinstance(branch, dict):
+                errors.append(f"{branch_location}: must be an object")
+                continue
+            for field in branch.keys() - {"prompt", "expected", "must_not"}:
+                errors.append(f"{branch_location}: unknown field {field}")
+            check_strings(branch, ("prompt", "expected"), branch_location)
+            if "must_not" in branch:
+                check_strings(branch, ("must_not",), branch_location)
+    for name in names - seen:
+        errors.append(f"{name}: no trigger/skip behavior case")
+    return errors
+
+
 def scan(root=ROOT):
     errors, warnings, entries = [], [], []
     for skill in sorted(p for p in root.iterdir() if p.is_dir() and (p / "SKILL.md").is_file()):
@@ -81,14 +135,7 @@ def scan(root=ROOT):
                     errors.append(f"{doc.relative_to(root)}: missing script/resource {relative}")
     cases_path = root / "_maintenance" / "behavior-cases.json"
     if cases_path.exists():
-        cases = json.loads(cases_path.read_text(encoding="utf-8"))
-        coverage = {item.get("skill") for item in cases}
-        names = {item["name"] for item in entries}
-        for name in names - coverage:
-            errors.append(f"{name}: no trigger/skip behavior case")
-        for item in cases:
-            if item.get("skill") not in names or not all(item.get(k) for k in ("trigger", "skip", "expected", "must_not")):
-                errors.append(f"Invalid behavior case: {item.get('skill')}")
+        errors.extend(check_behavior_cases(cases_path, {item["name"] for item in entries}))
     else:
         errors.append("Missing behavior-cases.json")
     return {"status": "failed" if errors else "ok", "root": str(root), "skills": entries, "errors": sorted(set(errors)), "warnings": warnings,

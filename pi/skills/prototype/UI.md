@@ -1,112 +1,43 @@
-# UI Prototype
+# UI 原型
 
-Generate **several radically different UI variations** on a single route, switchable from a floating bottom bar. The user flips between variants in the browser, picks one (or steals bits from each), then throws the rest away.
+用最小可运行页面回答明确的视觉或交互问题。沿用 [主入口](SKILL.md) 的授权、隔离与交付边界；逻辑验证可改用脚本或 [可交互逻辑演示](LOGIC.md)，不必为了展示做 UI。
 
-If the question is about logic/state rather than what something looks like, this is the wrong branch. Use [LOGIC.md](LOGIC.md).
+## 1. 先确定要比较什么
 
-## When this is the right shape
+已选定方向、只验证局部交互时做一个方案，不造切换器。需要比较时，按问题选择足够区分路线的少量方案，通常 2–3 个；用户明确给出的数量优先，不凑数量或设任意硬上限。
 
-- "What should this page look like?"
-- "I want to see a few options for this dashboard before committing."
-- "Try a different layout for the settings screen."
-- Any time the user would otherwise spend a day picking between three vague mockups in their head.
+变化应针对问题：比较信息架构就改变布局或层次，比较密度、颜色或文案则可以保留相同布局。其他条件尽量一致，避免把变量全部换掉后无法解释差异。复用组件库和真实页面的内容密度，用夹具覆盖长文案、空数据及关键错误状态。
 
-## Two sub-shapes: strongly prefer sub-shape A
+开始前写清问题、方案区别和本次不验证的内容。原型不是完成产品，也不是默认启动多轮设计访谈。
 
-A UI prototype is much easier to judge when it's **butting up against the rest of the app**: real header, real sidebar, real data, real density. A throwaway route on its own is a vacuum: every variant looks fine in isolation. Default to sub-shape A whenever there's a plausible existing page to host the variants. Only reach for sub-shape B if the prototype genuinely has no nearby home.
+## 2. 选择能安全运行的位置
 
-### Sub-shape A: adjustment to an existing page (preferred)
+优先采用项目现有原型环境或明确隔离的开发页面。若已授权嵌入现有页面，保留其正常行为和鉴权，仅在显式开发原型入口下替换相关渲染部分；无法安全隔离时使用单独本地产物，不直接改正常访问路径。
 
-The route already exists. Variants are rendered **on the same route**, gated by a `?variant=` URL search param. The existing data fetching, params, and auth all stay. Only the rendering swaps. This is the default; pick it unless there's a specific reason not to.
+| 场景 | 应有行为 |
+|---|---|
+| 原有页面未指定原型参数，或参数无效 | 显示原页面，不默认切到方案 A |
+| 原型环境已启用且选择了有效方案 | 显示对应方案和必要的原型标记 |
+| 生产环境访问任意原型参数/路由 | 原型组件、入口和副作用均不可启用；正常页面保持正常行为，独立原型路由不可用 |
 
-If the prototype is for something that doesn't yet have a page but *would naturally live inside one* (a new section of the dashboard, a new card on the settings screen, a new step in an existing flow), it's still sub-shape A. Mount the variants inside the host page.
+开发条件需在加载原型数据或触发副作用之前判断。按项目框架使用开发专用路由或构建隔离；仅隐藏底部切换条、加一个“prototype”文件名或 URL 参数都不构成隔离。
 
-### Sub-shape B: a new page (last resort)
+默认用本地 fixture 或 stub；复用页面不等于复用生产请求。确需连接数据源时先确认授权与环境，保留访问控制，避免真实写入、通知、支付或分析事件。需要模拟修改时只改本地状态。
 
-Only use this when the thing being prototyped genuinely has no existing page to live inside (e.g. an entirely new top-level surface, or a flow that can't be embedded anywhere sensible).
+## 3. 多方案才加切换
 
-Create a **throwaway route** following whatever routing convention the project already uses. Don't invent a new top-level structure. Name it so it's obviously a prototype (e.g. include the word `prototype` in the path or filename). Same `?variant=` pattern.
+多个方案使用最简单、明确的切换方式，优先复用现有开发预览设施；标签页、下拉框或浮动条均可，不强制固定底栏、共享组件抽象或全套快捷键。
 
-Before committing to sub-shape B, sanity-check: is there really no existing page this could be embedded in? An empty route hides design problems that a populated one would expose.
+需要可分享链接时可用 `?variant=`，只接受实际存在的方案标识；未知值按上表回退。若支持键盘切换，不抢占输入框、文本域或可编辑内容的方向键。单方案省略整个切换层。
 
-In both sub-shapes the floating bottom bar is identical.
+## 4. 运行与交付
 
-## Process
+先运行，再报告实际 URL/路径、启动方式、数据来源和局限。按问题做最小冒烟或交互检查：
 
-### 1. State the question and pick N
+- 目标场景能否操作，相关状态是否可见；多方案能否正确切换。
+- 嵌入现有页时，未启用/无效参数能否回到原页面；使用框架已有检查验证生产入口不会启用原型及其副作用。
+- 数据是否仍在隔离环境，是否误连真实写入路径。
 
-Default to **3 variants**. More than 5 stops being radically different and starts being noise, so cap there.
+只完成构建不等于已检查视觉与交互。无法运行浏览器或生产隔离检查时，分别注明未验证部分，不声称全部通过。
 
-Write down the plan in one line, in the prototype's location or a top-of-file comment:
-
-> "Three variants of the settings page, switchable via `?variant=`, on the existing `/settings` route."
-
-This works whether the user is here to push back or not.
-
-### 2. Generate radically different variants
-
-Draft each variant. Hold each one to:
-
-- The page's purpose and the data it has access to.
-- The project's component library / styling system (TailwindCSS, shadcn, MUI, plain CSS, whatever).
-- A clear exported component name, e.g. `VariantA`, `VariantB`, `VariantC`.
-
-Variants must be **structurally different**: different layout, different information hierarchy, different primary affordance, not just different colours. Three slightly-tweaked card grids isn't a UI prototype, it's wallpaper. If two drafts come out too similar, redo one with explicit "do not use a card grid" guidance.
-
-### 3. Wire them together
-
-Create a single switcher component on the route:
-
-```tsx
-// pseudo-code, adapt to the project's framework
-const variant = searchParams.get('variant') ?? 'A';
-return (
-  <>
-    {variant === 'A' && <VariantA {...data} />}
-    {variant === 'B' && <VariantB {...data} />}
-    {variant === 'C' && <VariantC {...data} />}
-    <PrototypeSwitcher variants={['A','B','C']} current={variant} />
-  </>
-);
-```
-
-For sub-shape A (existing page): keep all the existing data fetching above the switcher; only the rendered subtree changes per variant.
-
-For sub-shape B (new page): the throwaway route under `/prototype/<name>` mounts the same switcher.
-
-### 4. Build the floating switcher
-
-A small fixed-position bar at the bottom-centre of the screen with three pieces:
-
-- **Left arrow**: cycles to the previous variant (wraps around).
-- **Variant label**: shows the current variant key and, if the variant exports a name, that name too. e.g. `B (Sidebar layout)`.
-- **Right arrow**: cycles forward (wraps around).
-
-Behaviour:
-
-- Clicking an arrow updates the URL search param (use the framework's router, e.g. `router.replace` on Next, `navigate` on React Router, etc) so the variant is shareable and reload-stable.
-- Keyboard: `←` and `→` arrow keys also cycle. Don't intercept arrow keys when an `<input>`, `<textarea>`, or `[contenteditable]` is focused.
-- Visually distinct from the page (e.g. high-contrast pill, subtle shadow) so it's obviously not part of the design being evaluated.
-- Hidden in production builds: gate on `process.env.NODE_ENV !== 'production'` or an equivalent check, so a stray prototype merge can't ship the bar to users.
-
-Put the switcher in a single shared component so both sub-shapes can reuse it. Locate it wherever shared UI lives in the project.
-
-### 5. Hand it over
-
-Surface the URL (and the `?variant=` keys). The user will flip through whenever they get to it. The interesting feedback is usually **"I want the header from B with the sidebar from C"**, which is the actual design they want.
-
-### 6. Capture the answer and clean up
-
-Once a variant wins, capture which one and why, its limitations, and the local evidence path following [SKILL.md](SKILL.md). Keep that local artifact by default; branch creation and production promotion need explicit authorization. When the user authorizes production implementation:
-
-- **Sub-shape A**: fold the winner into the existing page; drop the losing variants and the switcher from main.
-- **Sub-shape B**: promote the winning variant to a real route; drop the throwaway route and the switcher from main.
-
-Preserve the full set of variants as a primary source at its documented local path, or on an explicitly authorized throwaway branch. Remove only this task's prototype code after preserving that evidence; do not delete user work or auto-commit to clear the working tree.
-
-## Anti-patterns
-
-- **Variants that differ only in colour or copy.** That's a tweak, not a prototype. Real variants disagree about structure.
-- **Sharing too much code between variants.** A shared `<Header>` is fine; a shared `<Layout>` defeats the point. Each variant should be free to throw out the layout.
-- **Wiring variants to real mutations.** Read-only prototypes are fine. If a variant needs to mutate, point it at a stub: the question is "what should this look like", not "does the backend work".
-- **Promoting the prototype directly to production.** The variant code was written under prototype constraints (no tests, minimal error handling). Rewrite it properly when you fold it in.
+交付可运行原型后等待用户反馈，未选中方案时不杜撰胜者。用户确认方向并授权生产实现后，再补生产安全、回归覆盖并集成；保留必要的本地证据，只清理本次创建且已确认不再需要的原型内容，不自动提交或删除用户文件。

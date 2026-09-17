@@ -1,11 +1,11 @@
 ---
 name: grilling
-description: Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases.
+description: 用户明确要求追问、访谈或压力测试方案时，按依赖分轮澄清取舍；普通方案建议、摘要和已确认实施不触发。
 ---
 
-Interview the user relentlessly until you reach a shared understanding. Map this as a **design tree**: every decision branches into the decisions that hang off it.
+Interview within the agreed scope until consequential choices are settled or explicitly deferred. Map dependencies as a **design tree**; do not turn incidental preferences into mandatory decisions.
 
-Work the tree in **rounds**. The **frontier** is every decision whose prerequisites are already settled: the questions you can ask _now_ without guessing at answers you haven't heard yet. Ask the whole frontier in one round: number each question and give your recommended answer. Then wait for the user's answers before the next round.
+Work the tree in **rounds**. The **frontier** contains decisions whose prerequisites are settled. Ask a small, high-impact subset per round, usually 1–3 questions; prioritize choices that unblock the most work or carry the greatest risk. Keep other questions pending rather than flooding the user. Number each question, explain the tradeoff and recommend an answer, then wait for the user's answers.
 
 Format a round like so:
 

@@ -1,6 +1,6 @@
 ---
 name: improve-codebase-architecture
-description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
+description: 显式评估代码库架构痛点，按证据与收益给出改进候选；默认简洁报告，选定候选后再讨论设计，不自动重构。
 disable-model-invocation: true
 ---
 
@@ -34,30 +34,24 @@ For substantial independent scanning, discover an executable read-only explorer 
 
 Apply the **deletion test** to anything you suspect is shallow: would deleting it concentrate complexity, or just move it? A "yes, concentrates" is the signal you want.
 
-### 2. Present candidates as an HTML report
+### 2. Present evidence-ranked candidates
 
-Write a self-contained HTML file to the OS temp directory so nothing lands in the repo. Resolve the temp dir from `$TMPDIR`, falling back to `/tmp` (or `%TEMP%` on Windows), and write to `<tmpdir>/architecture-review-<timestamp>.html` so each run gets a fresh file. Open it for the user (`xdg-open <path>` on Linux, `open <path>` on macOS, `start <path>` on Windows) and tell them the absolute path.
+Default to a concise Markdown report in the conversation; do not create a file just to wrap the review. For each worthwhile candidate include:
 
-Use inline CSS for an offline-readable report. Tailwind or Mermaid via CDN are optional only when network dependence is acceptable and disclosed; do not call a CDN-dependent report fully self-contained. Diagrams should communicate real graph/flow/sequence structure. Mix Mermaid with hand-crafted CSS/SVG visuals: use Mermaid when relationships are graph-shaped (call graphs, dependencies, sequences), and hand-built divs/SVG when you want something more editorial (mass diagrams, cross-sections, collapse animations). Each candidate gets a **before/after visualisation**. Be visual.
+- **Scope and evidence**: affected modules/files and concrete observed friction, with source locations where useful.
+- **Change**: what boundary would change and why; no detailed interface design yet.
+- **Benefits and costs**: testability/locality gains, migration risk, and reasons to keep the current design.
+- **Confidence**: `Strong`, `Worth exploring`, or `Speculative`, tied to the evidence and its gaps.
 
-For each candidate, render a card with:
+End with the top recommendation and why it outranks the others. If no candidate has convincing benefit, say so; do not manufacture refactoring work.
 
-- **Files**: which files/modules are involved
-- **Problem**: why the current architecture is causing friction
-- **Solution**: plain English description of what would change
-- **Benefits**: explained in terms of locality and leverage, and how tests would improve
-- **Before / After diagram**: side-by-side, custom-drawn, illustrating the shallowness and the deepening
-- **Recommendation strength**: one of `Strong`, `Worth exploring`, `Speculative`, rendered as a badge
-
-End the report with a **Top recommendation** section: which candidate you'd tackle first and why.
+Use diagrams only when they clarify actual relationships. If the user requests a visual deliverable, or complex dependency relationships materially benefit from one, produce an HTML report using [HTML-REPORT.md](HTML-REPORT.md). Write to the OS temp directory as `architecture-review-<timestamp>.html` unless the user specifies a destination, and report its absolute path. Prefer inline assets; disclose any CDN dependency. Open it only when requested and a desktop opener is available; inability to open it does not invalidate the report.
 
 **Use CONTEXT.md vocabulary for the domain and [design.md](references/design.md) for the architecture.** If `CONTEXT.md` defines "Order," talk about "the Order intake module," not "the FooBarHandler," and not "the Order service."
 
 **ADR conflicts**: if a candidate contradicts an existing ADR, only surface it when the friction is real enough to warrant revisiting the ADR. Mark it clearly in the card (e.g. a warning callout: _"contradicts ADR-0007, but worth reopening because…"_). Don't list every theoretical refactor an ADR forbids.
 
-See [HTML-REPORT.md](HTML-REPORT.md) for the full HTML scaffold, diagram patterns, and styling guidance.
-
-Do NOT propose interfaces yet. After the file is written, ask the user: "Which of these would you like to explore?"
+After the report, ask which candidate the user wants to explore. A review is complete when candidates, evidence, costs and uncertainty are clear; HTML generation and implementation are not completion requirements.
 
 ### 3. Grilling loop
 

@@ -1,81 +1,45 @@
 ---
 name: writing-for-agents
-description: Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md.
+description: 创建、修改或审查 skills、AGENTS.md、CLAUDE.md 及供 Agent 执行的指引；普通面向人的文档不触发。
 ---
 
-Reference for writing any document an agent consumes: a skill, an `AGENTS.md` / `CLAUDE.md`, a doc reached by a pointer. The packaging differs; the writing does not: the same levers make each one predictable, since the agent takes the same _process_ every run rather than producing the same output.
+# 编写 Agent 指引
 
-When the document you're writing is a skill, read [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md) for pi-specific frontmatter, invocation, resource paths and validation. Preserve user preferences; verify the actual host rather than importing another host's tool names. Changed skill behavior needs both a trigger case and a skip case, plus regression tests for executable state/data logic.
+目标是让 Agent 稳定采取正确行动，而不是把所有好建议收集进一篇长文。只审查时返回问题和建议；获授权编辑时才写入。
 
-## Context pointers
+## 1. 找到真正需要改变的行为
 
-A **context pointer** is a reference held in the agent's context that names some out-of-context material and encodes the condition for reaching it. A skill's description is one; a line in `AGENTS.md` naming a doc is the same object. The pointer's _wording_, not its target, decides when the agent reaches the material, and how reliably. A must-have target behind a weakly worded pointer is a variance bug: sharpen the wording first, and inline the material only if sharpening fails.
+先读现有指引及其引用，保留用户偏好。指出要纠正的具体失败：漏触发、误触发、动作不清、越权、验证不足或重复加载。普通新能力则先明确预期行为与免用场景。
 
-A pointer does two jobs: state what the material is, and list the **branches** that should trigger reaching it (a branch is a distinct case the document handles, so different runs take different paths through it). Every word of an always-loaded pointer costs on every turn, so it earns even harder pruning than the body:
+技能修改需读 [pi skill 机制](SKILL-MECHANICS.md)，按真实宿主能力设计，不移植其他工具的调用方式。优先修改现有规则的归属位置；只有行为需要独立触发时才新增入口。
 
-- **Front-load the leading word**: the pointer is where it does its triggering work.
-- **One trigger per branch.** Synonyms that rename a single branch are one branch written twice; collapse them and keep only genuinely distinct branches.
-- **Cut identity the body already carries.**
+完成条件：能给出一个应采用新规则的例子，以及一个不应采用它的例子。
 
-## The two loads
+## 2. 写最小可执行规则
 
-Every document and pointer you add spends one of two budgets:
+- **触发**：description 用任务语言说明何时使用、容易混淆时何时跳过。列不同分支，不堆同义词。
+- **动作**：按实际执行顺序写；必要时注明输入、前置能力、输出位置、缺依赖时的处理。参考型指引不强行改成步骤。
+- **完成**：写出可检查的结果，例如“给出真实命令与输出”，而不是“充分理解”。强度与风险相称，不用固定轮次、数量或产物形式代替质量。
+- **授权**：区分讨论、调查、写文件、实现和外部发布；高风险边界保持明确，不能因精简删掉。
+- **表达**：优先说明目标动作。否定规则只用于必要边界，并说明应当怎样做。已有通用术语能表达清楚时直接使用，不引入需要反复解释的新口号。
 
-- **Context load** is the cost of always-loaded material on the agent's window: an `AGENTS.md` line, a skill description, anything sitting in context every turn, spending tokens and attention whether or not it fires.
-- **Cognitive load** is the cost on the human: which documents exist and when to reach for each. The human is the index. Not a cost to minimise: it is the price of human agency; spend it where human judgement matters, remove it where it does not.
+如果模型通常已经稳定做到某件事，不靠直觉添加提醒；出现真实偏差再用案例判断是否需要规则。
 
-Material reached only through a pointer escapes context load at the price of the pointer's own line; material with no pointer at all rides entirely on cognitive load.
+## 3. 控制加载与维护成本
 
-## Information hierarchy
+同一规则保留一个权威位置，其他位置用带条件的链接引用。将定义、规则和例外放在一起；修改时同步检查入口与下钻参考，避免一个放宽、另一个仍强制。
 
-A document is built from two content types: **steps** (the ordered actions the agent performs) and **reference** (definitions, rules, facts consulted on demand). The two mix freely: all steps (a recipe), all reference (a review's rules, this skill), or both. The core decision is where each piece sits on the **information hierarchy**, a ladder ranked by how immediately the agent needs the material:
+所有分支都需要的规则留在入口，只有某一分支需要的资料按需加载。description 和常驻指引每轮都有成本；不要为了减少 skill 数量把长文搬进 AGENTS.md。
 
-1. **In-file step** is the primary tier: what the agent does, in order.
-2. **In-file reference** is consulted on demand. Often a legitimately flat peer-set (every rule of a review on one rung), which is a fine arrangement, not a smell.
-3. **Disclosed reference** is pushed out into a separate file, reached by a context pointer, loaded only when the pointer fires. Spans a sibling file in the same folder through fully external reference that lives anywhere and any document can point at.
+可从项目配置或一条命令直接发现的信息，优先现场查询；文档保存难以发现的约定、原因与陷阱。把内容拆出去也有导航成本，短小且连贯的规则不必拆分。
 
-Push too little down and the top bloats; push too much and you hide material the agent actually needs. That tension is the whole decision.
+先改善含糊的完成条件。只有观察到后续步骤导致抢跑、且存在真正独立的调用或上下文边界时，才按阶段拆入口；同一上下文多读一个文件不构成隔离。
 
-**Progressive disclosure** is the move down the ladder (out of the main file and behind a pointer) so the top stays legible. Not primarily a token optimisation: it is how the hierarchy is protected. Branching is the cleanest disclosure test: inline what every branch needs, and push behind a pointer what only some branches reach. When a document has steps, in-file reference that should be disclosed buries them and turns attending to them into a coin-flip: a variance lever, not just a legibility one.
+## 4. 验证并交付
 
-**Co-location** is the within-file companion: where the ladder decides _how far down_ a piece sits, co-location decides _what sits beside it_ once there. Keep a concept's definition, rules, and caveats under one heading rather than scattered, so reading one part brings its neighbours with it. The test: the document should read like documentation written for the agent. Grouped material reads that way; scattered material does not. (Distinct from duplication: that repeats one meaning in two places; scattering fragments one meaning across many.)
+- 变更行为至少提供 trigger、skip、expected 和 must_not；分支或授权例外补附加案例。
+- 技能运行 [维护检查](../_maintenance/README.md)，核对 frontmatter、资源链接及案例结构。AGENTS.md 等项目指引使用宿主已有检查，并核对引用可达。
+- 修改执行器、状态或落盘逻辑时，补自动化回归并实际运行；有可复现故障时先观察失败再验证修复。
+- 行为是否更稳定，需要新会话执行案例；静态检查只验证结构，阅读规则或自述会遵循都不是行为证据。没有运行就明确未验收。
 
-**Sprawl** is the failure mode here: a document simply too long, even when every line is live and unique. Attention thins across the excess, and every extra line is one more to keep relevant. The cure is the ladder: disclose reference behind pointers, and split by branch or sequence so each path carries only what it needs.
-
-## Steps and completion criteria
-
-Every step ends on a **completion criterion**, the condition that tells the agent the work is done. Two properties make it a lever:
-
-- **Clarity**: can the agent tell done from not-done? A vague bound ("understanding reached") invites **premature completion**: ending the step before it is genuinely done, attention slipping to _being done_. The visible steps still ahead (the **post-completion steps**) supply the pull; the criterion's clarity is the resistance. Defend in order: **sharpen the bound first** (local and cheap); only if it is irreducibly fuzzy _and_ you observe the rush, hide the later steps by splitting the sequence. Hiding only works across a real context boundary (a hand-off or a subagent dispatch; an inline call leaves the later steps in context and clears nothing).
-- **Demand**: how much it requires. "Every modified model accounted for" forces thorough work where "produce a change list" does not. Demand drives **legwork** (the digging the agent does within the work, latent in the wording rather than written as its own step), and it is not step-bound: "every rule applied" binds a body of flat reference just as "every step done" binds a sequence, which is how an all-reference document still carries an exhaustiveness bar.
-
-The strongest criteria are both checkable and exhaustive.
-
-## When to split
-
-Splitting one document into two spends one of the two loads, so split only when the cut earns it:
-
-- **By sequence**: split a run of steps where the post-completion steps tempt the agent to rush the one in front of it. Keeping them out of view drives more legwork on the current task. Beware the reverse: merging sequences exposes each step's later steps to what follows, inviting premature completion.
-- **By invocation**, skill-specific: see [`SKILL-MECHANICS.md`](SKILL-MECHANICS.md).
-
-## Leading words
-
-A **leading word** is a compact concept already living in the model's pretraining that the agent thinks with while running the document (_lesson_, _fog of war_, _tracer bullets_). Repeated as a token, never as a sentence, it accumulates a distributed definition and anchors a whole region of behaviour in the fewest tokens, by recruiting priors the model already holds. Coining your own works if you define it clearly, but a made-up word recruits no priors: you pay in definition tokens what a pretrained word gives free; reach for an existing word first.
-
-It anchors twice. In the body, _execution_: the agent reaches for the same behaviour every time the word appears, and inside flat reference it focuses attention on a class of thing to look for. In a pointer, _invocation_: when the same word lives in your prompts, your docs, and your codebase, the agent links that shared language to the material and reaches it more reliably.
-
-Hunt for opportunities to refactor with leading words. A triad spelled out at three sites, a pointer spending a sentence to gesture at one idea. Each is a passage begging to collapse into a single token:
-
-- "fast, deterministic, low-overhead" → _tight_ (a _tight_ loop).
-- "a loop you believe in" → _red_, turning a fuzzy gate into a binary observable state (the loop goes _red_ on the bug, or it doesn't).
-
-You win twice: fewer tokens, and a sharper hook for the agent to hang its thinking on. Assume every document is carrying restatements that leading words retire. Go find them.
-
-**Negation** is the failure mode beside this lever: steering by prohibition drags the forbidden behaviour into context and makes it _more_ available, not less. _Don't think of an elephant_, and the elephant is all there is; the negation is a weak modifier the strongly-activated concept overruns, so the ban half-reads as an instruction to do the thing. Prompt the **positive**: state the target behaviour ("write one-line comments") so the banned one is never spoken. A prohibition earns its place only as a hard guardrail you cannot phrase positively; even then, pair it with the positive target so attention lands on what to do.
-
-## Pruning
-
-- Keep each meaning in a **single source of truth**: one authoritative place, so changing the behaviour is a one-place edit. **Duplication** (the same meaning in more than one place) costs maintenance and tokens, and inflates a meaning's prominence on the ladder past its real rank. (The accidental inverse of a leading word, which repeats a token on purpose, never the meaning.)
-- The **environment** is a source of truth too (`package.json` scripts, config files, the directory layout, `--help` output), and a document that restates it is a **cache**: a copy of a lookup, earning its load only when the lookup is expensive. Cache what the agent cannot find by looking: the unwritten convention, the reason behind a choice, the gotcha no config confesses. Leave the one-file, one-command lookups to the environment, where they cannot go stale.
-- Check every line for **relevance**: does it still bear on what the document does? A line loses relevance by never bearing on the task (mere exposition, or a branch that should be disclosed) or by going stale as the behaviour or world it describes changes. Shorter documents are easier to keep relevant. Without a pruning discipline the default fate is **sediment**: stale layers that settle because adding feels safe and removing feels risky, until you must core down through them to find what is still live.
-- Hunt **no-ops** sentence by sentence: an instruction the model already obeys by default pays load to say nothing. The test (does it change behaviour versus the default?) is model-relative, not reader-relative: two people disagreeing about a no-op disagree about the default, and settle it by running the document, not by debate. When a sentence fails, delete the whole sentence rather than trim words from it. The test also grades leading words: a word too weak to beat the default (_be thorough_ when the agent is already thorough-ish) is a no-op, and the fix is a stronger word (_relentless_), not a different technique.
+交付实际修改位置、验证命令及结果、剩余缺口。不为机械措辞修改新增决定记录；形成长期约束或改变既有取舍时，按 [decision-notes](../decision-notes/SKILL.md) 更新其唯一归属。

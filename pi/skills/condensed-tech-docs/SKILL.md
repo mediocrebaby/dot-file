@@ -1,51 +1,31 @@
 ---
 name: condensed-tech-docs
-description: "Plainspoken technical documentation: feature-oriented, behavior-focused, and highly concise. Use when writing feature descriptions, implementation studies, technical proposals, or comparative analyses, or when rewriting technical documentation to be more concise and less code-centric."
+description: 编写或精简用于理解与决策的技术说明、方案和对比分析；按行为组织，保留证据与代价，不适用于 API 参数参考、操作手册或代码注释。
 ---
 
-Call this style **plainspoken**: explain a complex system clearly enough for anyone to understand. Describe behavior rather than implementation; after reading, the reader should be able to explain how it works to someone else.
+# 简明技术说明
 
-## What the style looks like
+让未读过代码的人理解系统行为、适用边界和选择代价。只负责表达，不替用户作决定或创建决策记录。
 
-**Narrative perspective.** Describe the system at the behavioral level, as if it were a black box with a personality: what happens, what it does, and what results. Class names, function names, and line numbers stay out of the main text—implementation details belong in the code, not the documentation. The reader should not need to read a single line of code to understand the document.
+## 写作顺序
 
-The same fact, written two ways:
+1. 明确目的：解释系统、提出变化，还是比较选择。用一句话写出核心结论；依据不足就先查材料，不用漂亮措辞补空白。
+2. 按读者关心的行为组织：系统按功能，方案按变化，对比按评价维度。不要按阅读文件的顺序写。
+3. 先说明做什么，再说明如何表现、何时不适用、付出什么代价。流程用步骤，对比用表格，其余用短段落。
+4. 删掉不增加信息的句子；保留限制、风险、不确定性和真实验证结果。长度服从信息量，不强凑章节。
 
-- Implementation-heavy: "`WebDAVConnector.download_file()` reads the entire file into memory through `BytesIO` and does not support resumable downloads (`webdav_connector.py:179`)."
-- Plainspoken: "Downloads load the entire file into memory and cannot be resumed, so large files may create memory pressure."
+## 细节与证据
 
-**Organizational granularity.** Break the subject down by *what it does*, not by *how it is implemented*. A system spread across a dozen files may expose only seven or eight small features; a change touching many places may contain only two or three meaningful change points. The unit of decomposition is a **feature** that can be named, not a file.
+正文优先解释可观察行为，代码符号和实现位置仅在定位、验证或操作确有需要时保留，可放入证据或附注。不要把“少谈代码”理解成删除来源。
 
-**Texture.** Every sentence carries new information. Begin with a one-sentence orientation, then expand in concise points. Favor nouns and verbs; use few adjectives. Do not force standalone sentences into paragraphs. Use prose for explanation, numbered steps for processes, and tables for comparisons—the form should follow the shape of the information.
+例如：“下载将整个文件载入内存且无法断点续传，大文件可能带来内存压力。”比围绕类名逐行解释更适合功能说明。
 
-**Honesty.** What the system cannot do matters as much as what it can. State limitations, unsupported scenarios, and the costs of tradeoffs where they belong. A text that only says what something can do is advertising; documentation also explains what it cannot do.
+已有 ADR/Notes 沿用宿主模板；涉及决定维护时按 [decision-notes](../decision-notes/SKILL.md) 处理。保留必需标题、约束强度、安全例外、来源和链接，不以简短为由弱化规则。总结或比较本身不授权创建工程决定文件。
 
-## How to begin
+## 完成检查
 
-Structure is not a template; it grows from the subject. Before writing, work through this sequence:
+- 未读代码的读者能否复述核心结论？
+- 每段是否提供新信息，且事实有依据？
+- 能力、限制、成本与未验证事项是否同时清楚？
 
-**Find the governing verb.** What is the document trying to do—explain a system, drive a change, support a decision, or compare options? The verb determines the direction: explanations unfold by feature, change proposals by change point, and decision support by evaluation dimension.
-
-**Find the spine sentence.** Summarize the entire document in one sentence. If you cannot, you do not understand the subject yet; return to the source material and verify the facts. This sentence becomes the opening orientation and the test for every later detail: if something does not support it, leave it out.
-
-**Follow the subject's natural seams.** Divide working systems by feature, proposed changes by change point, and alternatives by comparison dimension. Each unit should have a clear name and be explainable in about three sentences.
-
-**Order sections by the reader's questions.** Do not preserve the author's discovery order. Follow the order in which questions naturally arise: What is it? → How does it work? → When does it work, and when does it not? → What tradeoffs create those behaviors? → What can it not do? For a proposal, continue with: What changes? → What does it cost? → How will it be verified? A strong sequence lets the reader anticipate the next section from the previous one.
-
-**Give every section a reason to exist.** Sections should form a causal or progressive chain, with each one arising naturally from the last. If removing a section does not weaken the reader's understanding, remove it or merge it elsewhere.
-
-**End with tradeoffs.** Bring the document back to limitations and costs: what these capabilities require, and where their boundaries lie.
-
-## Tests for the result
-
-Judge the style by its effect, not its format. After writing, ask:
-
-- Can someone who has never read the code restate the document's core idea?
-- Would removing any paragraph cause the reader to lose information?
-- If the reader remembers only one sentence, will it be the spine sentence?
-
-## Boundary
-
-This style serves documents intended to support **understanding and decisions**. Documents intended for step-by-step operation—API references, deployment manuals, and code comments—need implementation details and should use a different style.
-
-This skill owns expression, not decision lifecycle. When editing ADRs/Notes, preserve the host template and the evidence, obligation words, exceptions and links required by [decision-notes](../decision-notes/SKILL.md). Keep machine-required headings even when ordinary prose would be shorter. A request to summarize or compare does not itself authorize creating decision files.
+交付用户要求的正文或文件；不额外附写作过程或评分。

@@ -1,141 +1,62 @@
 ---
 name: diagnosing-bugs
-description: Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow.
+description: 排查报错、错误行为或性能退化；以真实症状的复现与验证约束修复，单纯解释代码不触发。
 ---
 
-# Diagnosing Bugs
+# 以证据驱动排障
 
-A discipline for hard bugs. For a clear local fix, keep one red-to-green reproduction and the cleanup gate; skip hypothesis ranking and extensive minimisation with an explicit reason. Hard, cross-module, intermittent or performance failures use the full loop.
+目标是解释用户的真实症状，并用可重复的检查验证已授权的修复。先确认任务范围：“排查／诊断／只读”默认调查和建议，不授权修改项目文件；用户要求修复时才实施代码及相关测试修改。复现所需临时产物保持隔离，修改配置、项目测试、生产仪器化或其他有副作用的操作需在授权范围内。
 
-When exploring, read `CONTEXT.md` if present and discover relevant ADRs/Notes through [decision-notes](../decision-notes/SKILL.md). Existing constraints and rejected approaches narrow the investigation. Reading history does not require creating a record.
+简单局部问题走“复现 → 修复 → 验证”；跨模块、间歇性或性能问题使用完整调查。按问题复杂度增加步骤，不为凑流程制造假设或文档。
 
-## Redact
+## 1. 确认症状和已有约束
 
-This skill has you show commands, outputs and captured artifacts. **Redact every secret first**: write `<REDACTED>` in its place. Build loops against env vars, so the credential stays in the environment rather than in what you show. Captured artifacts carry auth headers: quote only the lines that carry the signal.
+明确预期、实际行为、影响范围和已知触发条件。先查相关代码、日志、配置与测试；可形成暂定假设，用来指导复现，不能将猜测写成已确认根因。
 
-If the redacted output is not enough to diagnose the bug, say so and ask the user.
+存在 CONTEXT.md 时按需读取术语。涉及既有技术取舍或约束时，通过 [decision-notes](../decision-notes/SKILL.md) 查找相关记录，不因普通排障全量加载历史。
 
-## Phase 1: Build a feedback loop
+命令、日志、请求和截图中的凭据先脱敏。敏感参数从环境变量读取；报告仅摘录必要证据。
 
-**This is the skill.** Everything else is mechanical. If you have a **tight** pass/fail signal for the bug (one that goes red on _this_ bug), you will find the cause; bisection, hypothesis-testing, and instrumentation all just consume it. If you don't have one, no amount of staring at code will save you.
+完成条件：能够描述待验证的具体症状，并区分事实、推测与信息缺口。
 
-Spend disproportionate effort here. **Be aggressive. Be creative. Refuse to give up.**
+## 2. 建立可运行的反馈
 
-### Ways to construct one, in roughly this order
+优先复用现有测试或 CLI/HTTP 调用；必要时构造最小夹具、浏览器脚本、请求回放、临时 harness 或差分检查。必须让检查覆盖真实触发路径，而不只是“没有崩溃”。人工操作不可避免时可用 [HITL 模板](scripts/hitl-loop.template.sh) 记录步骤。
 
-1. **Failing test** at whatever seam reaches the bug: unit, integration, e2e.
-2. **Curl / HTTP script** against a running dev server.
-3. **CLI invocation** with a fixture input, diffing stdout against a known-good snapshot.
-4. **Headless browser script** (Playwright / Puppeteer) that drives the UI and asserts on DOM/console/network.
-5. **Replay a captured trace.** Save a real network request / payload / event log to disk; replay it through the code path in isolation.
-6. **Throwaway harness.** Spin up a minimal subset of the system (one service, mocked deps) that exercises the bug code path with a single function call.
-7. **Property / fuzz loop.** If the bug is "sometimes wrong output", run 1000 random inputs and look for the failure mode.
-8. **Bisection harness.** If the bug appeared between two known states (commit, dataset, version), automate "boot at state X, check, repeat" so you can `git bisect run` it.
-9. **Differential loop.** Run the same input through old-version vs new-version (or two configs) and diff outputs.
-10. **HITL bash script.** Last resort. If a human must click, drive _them_ with `scripts/hitl-loop.template.sh` so the loop is still structured. Captured output feeds back to you.
+- 尽量缩短运行时间、减少无关输入、固定时间和随机种子。大型集成场景允许分钟级检查；速度是优化目标，不是继续调查的门槛。
+- 间歇性问题记录运行次数、失败次数与环境，尝试提高复现率。比较修复前后时保持条件一致；一次未失败不能证明修复。
+- 性能问题先记录基线、负载和测量方法，再用 profiler、查询计划或版本差分缩小范围。
+- 最小化到足以区分原因即可，不要求证明每个剩余输入都不可删除。
 
-Build the right feedback loop, and the bug is 90% fixed.
+完成条件：实际运行并记录一个能检测该症状的命令及结果。优先观察修复前失败；尚未观察到失败时明确标注验证缺口。
 
-### Tighten the loop
+无法复现时，列出尝试过的检查与缺少的条件，继续做有边界的只读调查，或请求脱敏日志、环境访问及必要的仪器化授权。此时可以给候选原因，不能宣称根因已确认或修复已验证；高风险修改等待证据或用户确认。
 
-Treat the loop as a product. Once you have _a_ loop, **tighten** it:
+## 3. 用证据区分原因
 
-- Can I make it faster? (Cache setup, skip unrelated init, narrow the test scope.)
-- Can I make the signal sharper? (Assert on the specific symptom, not "didn't crash".)
-- Can I make it more deterministic? (Pin time, seed RNG, isolate filesystem, freeze network.)
+复杂问题列出少量有依据的候选原因，按证据排序；每个候选写出可验证的预测。明显局部问题不强凑 3–5 个假设。
 
-A 30-second flaky loop is barely better than no loop; a 2-second deterministic one is tight, a debugging superpower.
+选择能区分候选的检查，一次改变一个关键变量。向用户简述当前判断和证据；事实能自行检索就先查，不为流程检查点停下来等待。
 
-### Non-deterministic bugs
+优先 debugger/REPL，其次边界处的定向日志。临时日志用唯一前缀，例如 `[DEBUG-a4f2]`。性能调查以测量为主，而不是增加大量日志。
 
-The goal is not a clean repro but a **higher reproduction rate**. Loop the trigger 100×, parallelise, add stress, narrow timing windows, inject sleeps. A 50%-flake bug is debuggable; 1% is not, so keep raising the rate until it's debuggable.
+完成条件：说明哪些证据支持原因、哪些替代解释已排除；仍有不确定性时保留它。
 
-### When you genuinely cannot build a loop
+## 4. 修复与回归
 
-Stop and say so explicitly. List what you tried. Ask the user for: (a) access to whatever environment reproduces it, (b) a redacted captured artifact (HAR file, log dump, core dump, screen recording with timestamps), or (c) permission to add temporary production instrumentation. Do **not** proceed to hypothesise without a loop.
+仅调查任务到此报告原因、证据与建议补丁，不直接写入项目。以下步骤仅在当前任务已授权修复时执行。
 
-### Completion criterion: a tight loop that goes red
+在真实调用边界上建立回归检查，尽可能先看失败再应用修复。不要用无法覆盖并发、多调用者或完整调用链的浅层测试代替原始问题。
 
-Phase 1 is done when the loop is **tight** and **red-capable**: you can name **one command** (a script path, a test invocation, a curl) that you have **already run at least once** (show the invocation and its output, redacted), and that is:
+没有合适测试边界时，保留可运行复现并说明自动化缺口；只有任务确有必要且在授权范围内才调整架构。应用最小相关修复后，重新运行回归检查、原始场景和受影响测试。新测试通过但未观察过修复前失败时，如实说明证据强度。
 
-- [ ] **Red-capable**: it drives the actual bug code path and asserts the **user's exact symptom**, so it can go red on this bug and green once fixed. Not "runs without erroring"; it must be able to _catch this specific bug_.
-- [ ] **Deterministic**: same verdict every run (flaky bugs: a pinned, high reproduction rate, per above).
-- [ ] **Fast**: seconds, not minutes.
-- [ ] **Agent-runnable**: you can run it unattended; a human in the loop only via `scripts/hitl-loop.template.sh`.
+完成条件：修复与症状之间有可解释的联系，实际验证结果与剩余缺口均已记录。
 
-If you catch yourself reading code to build a theory before this command exists, **stop: jumping straight to a hypothesis is the exact failure this skill prevents.** No red-capable command, no Phase 2.
+## 5. 清理与交付
 
-## Phase 2: Reproduce + minimise
+- 用 `rg` 检查并移除本次临时日志；只清理本次创建且不再需要的临时产物，保留必要的脱敏复现证据。
+- 报告确认的原因或当前候选、修改内容、真实执行的命令和结果。
+- 形成非显然约束、易复发根因或重要绕行方案时，交给 [decision-notes](../decision-notes/SKILL.md)；普通局部修复不新建 Note。
+- 不自动提交或发布；用户要求提交时才交给 [committing-changes](../committing-changes/SKILL.md)。
 
-Run the loop. Watch it go red as the bug appears.
-
-Confirm:
-
-- [ ] The loop produces the failure mode the **user** described, not a different failure that happens to be nearby. Wrong bug = wrong fix.
-- [ ] The failure is reproducible across multiple runs (or, for non-deterministic bugs, reproducible at a high enough rate to debug against).
-- [ ] You have captured the exact symptom (error message, wrong output, slow timing) so later phases can verify the fix actually addresses it.
-
-### Minimise
-
-Once it's red, shrink the repro to the **smallest scenario that still goes red**. Cut inputs, callers, config, data, and steps **one at a time**, re-running the loop after each cut, and keep only what's load-bearing for the failure.
-
-Why bother: a minimal repro shrinks the hypothesis space in Phase 3 (fewer moving parts left to suspect) and becomes the clean regression test in Phase 5.
-
-Done when **every remaining element is load-bearing**: removing any one of them makes the loop go green.
-
-Do not proceed until you have reproduced **and** minimised.
-
-## Phase 3: Hypothesise
-
-Generate **3–5 ranked hypotheses** before testing any of them. Single-hypothesis generation anchors on the first plausible idea.
-
-Each hypothesis must be **falsifiable**: state the prediction it makes.
-
-> Format: "If <X> is the cause, then <changing Y> will make the bug disappear / <changing Z> will make it worse."
-
-If you cannot state the prediction, the hypothesis is a vibe: discard or sharpen it.
-
-**Show the ranked list to the user before testing.** They often have domain knowledge that re-ranks instantly ("we just deployed a change to #3"), or know hypotheses they've already ruled out. Cheap checkpoint, big time saver. Don't block on it; proceed with your ranking if the user is AFK.
-
-## Phase 4: Instrument
-
-Each probe must map to a specific prediction from Phase 3. **Change one variable at a time.**
-
-Tool preference:
-
-1. **Debugger / REPL inspection** if the env supports it. One breakpoint beats ten logs.
-2. **Targeted logs** at the boundaries that distinguish hypotheses.
-3. Search narrowly with `rg`; collect only evidence that distinguishes hypotheses.
-
-**Tag every debug log** with a unique prefix, e.g. `[DEBUG-a4f2]`. Cleanup at the end becomes a single `rg` search. Untagged logs survive; tagged logs die.
-
-**Perf branch.** For performance regressions, logs are usually wrong. Instead: establish a baseline measurement (timing harness, `performance.now()`, profiler, query plan), then bisect. Measure first, fix second.
-
-## Phase 5: Fix + regression test
-
-Write the regression test **before the fix**, but only if there is a **correct seam** for it.
-
-A correct seam is one where the test exercises the **real bug pattern** as it occurs at the call site. If the only available seam is too shallow (single-caller test when the bug needs multiple callers, unit test that can't replicate the chain that triggered the bug), a regression test there gives false confidence.
-
-**If no correct seam exists, that itself is the finding.** Note it. The codebase architecture is preventing the bug from being locked down. Flag this for the next phase.
-
-If a correct seam exists:
-
-1. Turn the minimised repro into a failing test at that seam.
-2. Watch it fail.
-3. Apply the fix.
-4. Watch it pass.
-5. Re-run the Phase 1 feedback loop against the original (un-minimised) scenario.
-
-## Phase 6: Cleanup
-
-Required before declaring done:
-
-- [ ] Original repro no longer reproduces (re-run the Phase 1 loop)
-- [ ] Regression test passes (or absence of seam is documented)
-- [ ] All `[DEBUG-...]` instrumentation removed (`rg` the prefix)
-- [ ] Throwaway prototypes deleted (or moved to a clearly-marked debug location)
-- [ ] State the confirmed cause and actual verification commands/results. For a durable constraint, recurring failure or non-obvious workaround, update/create the owning [decision record](../decision-notes/SKILL.md) with the cause, regression surface and any missing test seam; PR/task text links to it. A trivial fix needs no new Note.
-- [ ] No automatic Git commit or external publication: hand off to [committing-changes](../committing-changes/SKILL.md) only when the user requests a commit. Keep sensitive artifacts out of records.
-
-Script paths such as `scripts/hitl-loop.template.sh` resolve from this skill directory, not cwd. Tool and delegation adaptation: [pi runtime](../_maintenance/PI-RUNTIME.md).
+脚本相对本 skill 目录解析；调用脚本或委派时见 [pi 宿主适配](../_maintenance/PI-RUNTIME.md)。

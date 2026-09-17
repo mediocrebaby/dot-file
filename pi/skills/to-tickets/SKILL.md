@@ -1,105 +1,65 @@
 ---
 name: to-tickets
-description: 将方案拆为带依赖和验收标准的本地票据；用户确认拆分并授权后可发布到已有 tracker。
+description: 显式将方案拆为带依赖和验收标准的票据；沿用已确认拆分，默认交付草稿，外部创建或修改须在授权范围内。
 disable-model-invocation: true
 ---
 
-# To Tickets
+# 将方案拆成可验收任务
 
-Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
+从已有方案、spec 或讨论提炼可独立验证的工作单元，不把拆票当成重新设计或开始实施。单个小修复不必强拆多票。
 
-Discover the existing tracker using [tracker adaptation](../wayfinder/references/tracker.md); absent one, use local Markdown. Respect actual labels, permissions and [pi runtime](../_maintenance/PI-RUNTIME.md).
+## 1. 确定来源与交付范围
 
-## Process
+复用已核实的上下文，只查影响拆分的缺口。用户给出 spec、Issue 或 URL 时读取正文和影响范围、决定及依赖的讨论；材料缺失就说明，不能凭标题补需求。沿用项目术语与相关 ADR，不为拆票全库扫描。
 
-### 1. Gather context
+区分“方案已确认”和“拆分已确认”：
 
-Work from whatever is already in the conversation context. If the user passes a reference (a spec path, an issue number or URL) as an argument, fetch it and read its full body and comments.
+- 新拆分默认先在对话中展示草稿；用户明确要求直接生成本地草稿时，可在指定或项目约定位置写入，并标明尚待确认。
+- 拆分仍未确定时，只确认粒度、真实阻塞关系及影响范围的重大选择；不重复询问已回答的问题。
+- 拆分与交付去向均已获授权时直接执行，不再加一轮形式确认。
+- 用户只要聊天清单就不写文件。读取外部来源不等于获准发布、认领或关闭 Issue。
 
-### 2. Explore the codebase (optional)
+本地持久化或外部交互时读取 [tracker 适配](../wayfinder/references/tracker.md)，沿用已有格式和位置；不为本地草稿主动探测外部服务。工具与路径见 [pi 宿主适配](../_maintenance/PI-RUNTIME.md)。
 
-If you have not already explored the codebase, do so to understand the current state of the code. Ticket titles and descriptions should use the project's domain glossary vocabulary, and respect ADRs in the area you're touching.
+## 2. 按可验收行为切分
 
-Look for opportunities to prefactor the code to make the implementation easier. "Make the change easy, then make the easy change."
+优先做窄而完整的纵向切片，每票交付一个可以演示或验证的行为，只贯穿该行为实际涉及的层；后端任务不为了“端到端”添加 UI。粒度以可独立理解、实施和验收为准，不靠文件数或固定票数决定。
 
-### 3. Draft vertical slices
+前置重构只在具体依赖或风险确有必要时单列，写清它解除什么阻碍；便利性不是让所有功能都等待重构的理由。探索尚未解决的选择可先列为调查票，不能把猜测写成实施前提。
 
-Break the work into **tracer bullet** tickets.
+大范围机械重构若无法独立保持验证通过，采用 **expand–contract**：先兼容新旧形式，再按影响范围迁移，最后在调用方已迁完后删除旧形式。每批复用受影响验证；确实只能整体集成验证时，明确独立票的验证缺口和最终集成验收。共享集成分支只能作为待授权方案，不在拆票时创建或切换分支。
 
-<vertical-slice-rules>
+每票至少说明：
 
-- Each slice cuts a narrow but COMPLETE path through every layer (schema, API, UI, tests): vertical, NOT a horizontal slice of one layer
-- A completed slice is demoable or verifiable on its own
-- Each slice is sized to fit in a single fresh context window
-- Any prefactoring should be done first
+- **标题与交付**：完成后有什么可观察变化。
+- **验收标准**：能判定完成的条件，包含相关边界或失败场景。
+- **Blocked by**：真正阻止开始或验收的依赖；区分必要前置与建议顺序。
+- **未决项**：如有影响实施的选择，明确阻塞而不是假定已定。
 
-</vertical-slice-rules>
+当前可推进集合（frontier）按 [tracker 适配](../wayfinder/references/tracker.md) 判断；它只是交接信息，不是自动实施授权。
 
-Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
+## 3. 交付或发布
 
-**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there.
+按项目已有模板，缺省本地路径为 `.scratch/<feature-slug>/issues/<NN>-<slug>.md`。写前核对已有身份；新票不覆盖旧文件，同一票的授权更新保留原身份及用户内容，不通过重新编号制造重复。仅尚未确认的新拆分注明“拆分待确认”。拆分确认状态与发布状态分开：已确认但只保存在本地的票标明“已确认、未外部发布”，不退回待确认；是否可推进仍取决于依赖与验收条件。
 
-### 4. Quiz the user
+最小票据正文可共用于本地与 tracker，宿主必需字段优先：
 
-Present the proposed breakdown as a numbered list. For each ticket, show:
-
-- **Title**: short descriptive name
-- **Blocked by**: which other tickets (if any) must complete first
-- **What it delivers**: the end-to-end behaviour this ticket makes work
-
-Ask the user:
-
-- Does the granularity feel right? (too coarse / too fine)
-- Are the blocking edges correct: does each ticket only depend on tickets that genuinely gate it?
-- Should any tickets be merged or split further?
-
-Iterate until the user approves the breakdown.
-
-### 5. Publish the tickets to the configured tracker
-
-Publish the approved tickets only within the user's authorized destination. Use the discovered tracker; missing tools or publication permission mean local drafts, not fictitious external issues:
-
-- **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`. Inspect existing identities before numbering; never overwrite prior tickets. Blockers use relative Markdown links with names, and the graph must have no missing references or cycles. Use the per-ticket template below.
-- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking / sub-issue relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. Use the project's existing triage labels; readiness depends on resolved blockers and complete acceptance criteria, not simply on creation.
-
-Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
-
-Do NOT close or modify any parent issue.
-
-<local-ticket-template>
-
-# <NN>: <Ticket title>
-
-**What to build:** the end-to-end behaviour this ticket makes work, from the user's perspective, not a layer-by-layer implementation list.
-
-**Blocked by:** the numbers/titles of the tickets that gate this one, or "None (can start immediately)".
-
-**Status:** open
-
-- [ ] Acceptance criterion 1
-- [ ] Acceptance criterion 2
-
-</local-ticket-template>
-
-<issue-template>
-
-## Parent
-
-A reference to the parent issue on the tracker (if the source was an existing issue, otherwise omit this section).
-
+```markdown
+# <票据标识与标题>
 ## What to build
-
-The end-to-end behaviour this ticket makes work, from the user's perspective, not layer-by-layer implementation.
-
+<交付行为>
 ## Acceptance criteria
-
-- [ ] Criterion 1
-- [ ] Criterion 2
-
+- [ ] <可检查条件>
 ## Blocked by
+<真实标识或具名链接，无依赖则写 None>
+```
 
-- A reference to each blocking ticket, or "None (can start immediately)".
+按需附上 Parent、状态和必要证据。外部发布按依赖顺序建立真实身份后再连接关系；部分失败按 tracker 规则报告并核对，不能盲目重试整批或虚构标识。
 
-</issue-template>
+路径、符号和小段契约若确有定位价值可以保留，注明当前事实或已确认约束；避免复制易失真的完整文件清单和代码。持久决定链接其归属 ADR/Note，新取舍按 [decision-notes](../decision-notes/SKILL.md) 处理，不在每票复制理由。
 
-In either form, link the owning ADR/Note for durable constraints; new confirmed choices use [decision-notes](../decision-notes/SKILL.md), without copying its rationale into every ticket. Creating or closing a planning ticket does not prove implementation. Avoid duplicating implementation file paths or code snippets that go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
+## 完成条件
+
+范围内的工作都有明确交付与验收，必要依赖可追溯且无环，未决选择及草稿/发布状态清楚。报告实际清单、文件或外部标识、可推进任务及剩余阻塞；未发布部分单列。
+
+创建票据不代表实现完成；本 skill 不自动实施代码、提交 Git，或修改/关闭父 Issue。另有明确授权时才执行对应操作。
