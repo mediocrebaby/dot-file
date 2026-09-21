@@ -1,0 +1,187 @@
+# pi-claude-code-ui
+
+> [!IMPORTANT]
+> **Package renamed in 1.0.69.** This project is now published as [`pi-claude-code-ui`](https://www.npmjs.com/package/pi-claude-code-ui) (was `pi-claude-style-tools`).
+>
+> Install / migrate:
+> ```bash
+> pi install npm:pi-claude-code-ui
+> # or
+> npm i pi-claude-code-ui
+> ```
+> See [CHANGELOG 1.0.69](./CHANGELOG.md#1069--2026-07-17) for the full release notes (status dots, bare branch connectors, and more).
+
+Claude Code inspired tool rendering for Pi — Shiki-powered diffs, status dots, branch connectors, file icons, and configurable output modes.
+
+## Features
+
+- **Compact built-in tool rendering** for `read`, `bash`, `grep`, `find`, `ls`, `edit`, and `write`
+- **Claude-style OpenAI tool rendering** for `apply_patch` plus common Pi/OpenAI-style tools like `webfetch`, `web_search`, `fetch_content`, task tools, and context tools
+- **`apply_patch` diff previews** that render parsed file patches in the call phase, similar to `edit`/`write`
+- **Adaptive edit/write diffs** with split or unified layouts, syntax highlighting, and inline word-level emphasis
+- **Diff stat bar** with colored add/remove summary and hunk metadata
+- **Progressive collapsed diff hints** that shorten on narrow terminals
+- **Live-only thinking** (default) — only the actively-streaming thinking renders expanded; finished thinking collapses to a one-line `Thought for Xs` row (`/cc-tools thinking full` restores always-expanded, `Ctrl+O` still expands anything)
+- **MCP-aware rendering** with hidden, summary, and preview modes
+- **Configurable output modes** for read, search, bash, and MCP results
+- **Live running previews** that show a few output lines for active tool calls (latest lines for bash), persisting until the next tool/text activity
+- **Subagent completion notifications** restyled to match the same Claude-style tool rows
+- **RTK rewrite integration** that folds rewrite notices into the bash tool row with a muted `(RTK)` badge and expanded-only rewrite details
+- **Opaque user messages** — user messages keep Pi's theme-filled background and render without an added outer border, so the message area reads as one solid panel
+- **Transparent tool backgrounds** in `transparent` or `border` mode
+- **Theme-adaptive palette** — borders, branch connectors, dim text, spinner accent, and diff backgrounds automatically follow the active pi theme (set `themeAdaptive: false` to keep the fixed Claude-style palette)
+- **Light Ghostty-sync themes** — edit/write diffs use `github-light` highlighting and light-tinted diff rows; tool pending dots use softer chrome colors
+- **Transparent edit/write diffs** with universal red/green diff colors
+- **Grouped consecutive tool calls** with single-row summaries for repeated targets and per-tool glance rows for mixed work (set `groupToolCalls: false` to disable)
+- **Three `Ctrl+O` detail levels** — `steps` (one row per tool), `full` (complete output), and `compressed` (one compact work block containing thinking, commands, listings, reads, edits, writes, patches, agents, and other intermediate activity)
+- **Extra detail toggle** with `Ctrl+Shift+O`, increasing expanded preview caps without making the default view heavy
+- **Global border patch** for all tool rows, including unknown/custom tools
+
+## Configuration
+
+Set in `.pi/settings.json` or `~/.pi/settings.json`:
+
+```json
+{
+  "toolBackground": "border",
+  "readOutputMode": "preview",
+  "searchOutputMode": "preview",
+  "mcpOutputMode": "preview",
+  "previewLines": 8,
+  "expandedPreviewMaxLines": 4000,
+  "extraExpandedPreviewMaxLines": 12000,
+  "extraToolOutputExpanded": false,
+  "groupToolCalls": true,
+  "toolFoldDefault": "steps",
+  "thinkingMode": "live",
+  "bashOutputMode": "opencode",
+  "bashCollapsedLines": 10,
+  "bashCommandPreviewLines": 8,
+  "liveToolPreview": true,
+  "liveToolPreviewLines": 5,
+  "diffCollapsedLines": 24,
+  "themeAdaptive": true,
+  "diffTheme": "github-dark"
+}
+```
+
+### Theme integration
+
+When `themeAdaptive` is `true` (default), the following colors are derived from the active pi theme on every render and re-derived whenever the theme changes:
+
+| Element | Derived from |
+|---------|--------------|
+| Tool rules, code fences | `dim` → `muted` → `borderMuted` → `thinkingText` |
+| Branch connectors (`├`, `└`, `│`) | **fixed rgb(72)** by default (theme-independent); `/cc-tools branch theme` to follow pi theme |
+| "✻ Turn took Ns" line (final message only, with session total + turn count) | `muted` |
+| Expanded thinking-block text and `∴` marker | `muted` |
+| Diff add/remove accents | `toolDiffAdded` / `toolDiffRemoved` |
+| Diff background tints | mixed against `toolSuccessBg` base |
+| Spinner verb text (`Working…`) | `borderAccent` (fallback: `accent`) |
+| Spinner status text | `muted` |
+
+User-supplied `diffTheme` presets and `diffColors` overrides always win over theme-derived defaults. File-type icons (e.g. `ts`, `py`, `rs`) keep their language-identity colors and are not theme-derived.
+
+Set `themeAdaptive: false` to keep the original fixed Claude-style palette regardless of the active pi theme.
+
+On `/resume`, `/new`, or `/fork`, tool chrome is rebound from the **current** pi theme (no coupling to Ghostty or other theme extensions). If you use Ghostty sync, listing it **above** this extension in `settings.json` is recommended so `setTheme` runs before chrome rebind.
+
+#### Toggle at runtime with `/cc-theme`
+
+```text
+/cc-theme           # show current setting + theme name
+/cc-theme status    # show current setting + color preview (incl. spinner)
+/cc-theme on        # follow pi theme
+/cc-theme off       # keep fixed Claude palette
+/cc-theme toggle    # flip the current value
+```
+
+The selection is persisted to `~/.pi/settings.json` and applied to the next rendered tool row. No restart required.
+
+#### Repaint the spinner with `/cc-spinner`
+
+The spinner glyph itself is still colored by pi's loader using `accent`, while the verb text (e.g. `Cooking…`) follows `borderAccent` by default so it stays lively without being the exact same color as the glyph. The status suffix (e.g. `(thinking · ↓ 10 tokens · 2s)`) follows `muted`. Use `/cc-spinner` to bind either text element to any other theme color key:
+
+```text
+/cc-spinner preview          # list every common theme key with a colored sample
+/cc-spinner verb <key>       # change the verb color (e.g. thinkingHigh, mdHeading)
+/cc-spinner status <key>     # change the status suffix color
+/cc-spinner reset            # restore defaults (verb=borderAccent, status=muted)
+```
+
+The selection is persisted as `spinnerVerbColor` / `spinnerStatusColor` in `~/.pi/settings.json` and applied on the next spinner tick.
+
+### Ctrl+O detail levels
+
+`Ctrl+O` cycles three levels. `/cc-tools status` reports the current and configured default levels. Set `"toolFoldDefault": "compressed"` to open every new, resumed, switched, forked, or reloaded session in the fully compressed view.
+
+| Level | Name | Rendering |
+|-------|------|----------|
+| 0 | `steps` | One row per tool showing its command or arguments, under a `Bash: 2 done` header row |
+| 1 | `full` | Complete tool output, matching Pi's expanded state |
+| 2 | `compressed` | A two-row work block per adjacent activity run, for example `● Thought for 2s, listed 1 directory, ran 1 shell command   Think × 2   List × 1   Bash × 1` followed by `└ 2 done   ctrl+o for details` |
+
+A work run contains adjacent thinking and tool activity, including edit, write, and apply_patch calls. Assistant prose, user messages, and compaction notices end it. The first row is a narrative sentence followed by the action counts, so `Thought for 2s` and the `Think × 2` count describe different quantities: thinking reports its total duration while every other action reports its count. The second row reports how many tool calls succeeded and how many failed, followed by file-change statistics. Completed diffs stay summarized; `steps` and `full` reveal the individual operations and complete diffs. While work is active, the first row uses progressive phrasing such as `✻ Thinking, running 1 shell command`, and its leading marker cycles through the `✻ ✽ ✢ ✳ ✶` asterisk family shared with the status-line loader. The second row stays a single live row that shows the newest output of the most recent action, so a work block keeps one fixed height from start to finish and the transcript never jumps while work runs. Action names use stable semantic colors, while `×`, branch connectors, and separators stay dim. When the terminal is too narrow for the counts, the narrative is kept intact and the counts are dropped before anything is truncated. The work region reserves one blank line above and keeps the existing conversation spacing below; its rows remain continuous. `Ctrl+Shift+O` keeps controlling expanded output detail.
+
+### Tool background modes
+
+| Value | Behavior |
+|-------|----------|
+| `default` | Standard Pi tool backgrounds |
+| `transparent` | Transparent tool backgrounds |
+| `border` | Transparent backgrounds with top/bottom border lines |
+
+Use `/cc-tools` to control tool UI at runtime:
+
+```text
+/cc-tools status          # show style, grouping, detail level, and extra-detail state
+/cc-tools outlines        # tool style: outlines, transparent, or default
+/cc-tools group toggle    # toggle grouped adjacent/concurrent tool calls
+/cc-tools group off       # disable grouping (also ungroups current grouped rows)
+/cc-tools thinking live   # default: only the streaming thinking expands; finished ones collapse
+/cc-tools thinking full   # always render thinking expanded, like stock pi
+/cc-tools detail toggle   # same mode as Ctrl+Shift+O
+```
+
+### Output modes
+
+| Setting | Values | Default |
+|---------|--------|---------|
+| `readOutputMode` | `hidden`, `summary`, `preview` | `preview` |
+| `searchOutputMode` | `hidden`, `count`, `preview` | `preview` |
+| `mcpOutputMode` | `hidden`, `summary`, `preview` | `preview` |
+| `bashOutputMode` | `opencode`, `summary`, `preview` | `opencode` |
+
+### Display settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `previewLines` | `8` | Lines shown in collapsed preview mode |
+| `expandedPreviewMaxLines` | `4000` | Max lines when expanded with Ctrl+O |
+| `extraExpandedPreviewMaxLines` | `12000` | Max lines after Ctrl+Shift+O extra-detail mode |
+| `extraToolOutputExpanded` | `false` | Start with Ctrl+Shift+O extra-detail mode enabled |
+| `groupToolCalls` | `true` | Group adjacent/concurrent calls, collapsing repeated targets into one row |
+| `toolFoldDefault` | `steps` | Default `Ctrl+O` level for every session: `steps`, `full`, or `compressed` |
+| `thinkingMode` | `live` | `live` = only streaming thinking expands (finished collapse to `Thought for Xs`); `full` = always expanded |
+| `bashCollapsedLines` | `10` | Lines for collapsed bash output |
+| `bashCommandPreviewLines` | `8` | Verbatim script lines shown while bash runs or after failure; `0` disables them |
+| `liveToolPreview` | `true` | Show a small live output preview while tools are still running |
+| `liveToolPreviewLines` | `5` | Maximum source lines available to live previews; the compressed work block always uses one live row, so this limit only widens the pool the newest line is taken from |
+| `diffCollapsedLines` | `24` | Diff lines before collapsing |
+
+## Notes
+
+This package targets recent Pi versions where tool renderers use:
+
+- `renderCall(args, theme, context)`
+- `renderResult(result, { expanded, isPartial }, theme, context)`
+
+Unknown/custom tools do not have a public global renderer hook in Pi, so this package patches container rendering to add top/bottom borders for all tool executions in border mode.
+
+## Credits
+
+This project builds upon and was inspired by the excellent work of:
+
+- **[@heyhuynhgiabuu/pi-pretty](https://github.com/buddingnewinsights/pi-pretty)** by [huynhgiabuu](https://github.com/buddingnewinsights) — Pretty terminal output with syntax-highlighted file reads, colored bash output, and tree-view directory listings
+- **[@heyhuynhgiabuu/pi-diff](https://github.com/buddingnewinsights/pi-diff)** by [huynhgiabuu](https://github.com/buddingnewinsights) — Shiki-powered terminal diff renderer with word-level diffs in split and unified views
+- **[pi-tool-display](https://github.com/MasuRii/pi-tool-display)** by [MasuRii](https://github.com/MasuRii) — Compact tool call rendering, diff visualization, and output truncation
