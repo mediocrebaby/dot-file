@@ -24,6 +24,7 @@ import { getCachedModelConfig } from "./models.ts";
 import { getCachedCredentials } from "./oauth.ts";
 import { qoderEncodeBody } from "./qoder-encoding.ts";
 import { ThinkingTagParser } from "./thinking-parser.ts";
+import { createQoderUsageUpdater } from "./token-usage.ts";
 import { transformMessagesForQoder, transformTools } from "./transform.ts";
 
 interface ToolCallState {
@@ -139,6 +140,8 @@ export function streamQoder(
     stopReason: "stop",
     timestamp: Date.now(),
   };
+
+  const updateUsage = createQoderUsageUpdater(output.usage);
 
   (async () => {
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -336,6 +339,8 @@ export function streamQoder(
           const inner = parseSseEnvelope(dataStr);
           if (inner === "[DONE]") break readLoop;
           if (inner) {
+            // Final usage often arrives on a separate frame with no choices.
+            updateUsage(inner.usage);
             if (inner.choices && inner.choices.length > 0) {
               const choice = inner.choices[0];
               const delta = choice.delta;

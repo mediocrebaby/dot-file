@@ -9,4 +9,9 @@ node --import jiti/register --test tests/*.test.ts
 
 已有宿主依赖时可使用本地链接，无需重新安装。`thinking-parser.ts` 使用 TypeScript 参数属性，不能只依赖 Node 的 strip-only 模式。
 
-`stream-errors.test.ts` 使用真实 Pi 事件流类，HTTP 返回全部为明确构造的模拟 SSE；测试在加载 provider 前隔离 HOME，不读取真实账号或更新真实模型缓存。覆盖首帧/中途错误、数字/字符串状态码、JSON 容错、凭证脱敏、DONE/EOF 结束以及用户取消，不代表真实上游兼容性验证。
+流测试使用真实 Pi 事件流类，HTTP 返回全部为明确构造的模拟 SSE；测试在加载 provider 前隔离 HOME，不读取真实账号或更新真实模型缓存，不代表真实上游兼容性验证。
+
+- `stream-errors.test.ts`：首帧/中途错误、数字/字符串状态码、JSON 容错、凭证脱敏、DONE/EOF 结束及用户取消。
+- `stream-usage.test.ts`：输入/输出/缓存/总量映射、usage-only 尾帧、重复及部分快照、零值和异常字段、错误/取消后的统计保留、跨请求隔离及不估算费用。
+
+usage 的来源、字段取舍与真实验收缺口见 [映射决定](../.agents/notes/implemented/feature/2026-09-22-qoder-token-usage.md)。
