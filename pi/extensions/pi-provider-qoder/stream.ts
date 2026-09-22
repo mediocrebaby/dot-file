@@ -35,6 +35,45 @@ interface ToolCallState {
   contentIndex: number;
 }
 
+// Malformed JSON is tolerated, but business errors must reach the terminal error handler.
+function parseSseEnvelope(data: string): Record<string, any> | "[DONE]" | undefined {
+  if (data === "[DONE]") return data;
+  let envelope;
+  try {
+    envelope = JSON.parse(data);
+  } catch {
+    return undefined;
+  }
+  if (!envelope || typeof envelope !== "object") return undefined;
+  const status = envelope.statusCodeValue;
+  if (status !== undefined && status !== null && status !== 200 && status !== "200") {
+    const detail = envelope.body || envelope.message || envelope.error || "No error details";
+    throw new Error(`Upstream status ${String(status)}: ${typeof detail === "string" ? detail : JSON.stringify(detail)}`);
+  }
+  if (envelope.body === "[DONE]") return "[DONE]";
+  let inner;
+  try {
+    inner = typeof envelope.body === "string" ? JSON.parse(envelope.body) : envelope.body;
+  } catch {
+    return undefined;
+  }
+  return inner && typeof inner === "object" ? inner : undefined;
+}
+
+function redactError(message: string, secrets: string[]): string {
+  for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) {
+    for (const form of [secret, encodeURIComponent(secret), JSON.stringify(secret).slice(1, -1)]) {
+      message = message.split(form).join("[REDACTED]");
+    }
+  }
+  return message
+    .replace(/\bBearer\s+[^\s"'<>]+/gi, "Bearer [REDACTED]")
+    .replace(
+      /((?:["']?)(?:authorization|access[_-]?token|refresh[_-]?token|security_oauth_token|api[_-]?key|cosy-key|cosy-machinetoken)["']?\s*[:=]\s*)("(?:\\.|[^"\\])*"|'[^']*'|[^\s,;}]+)/gi,
+      "$1\"[REDACTED]\"",
+    );
+}
+
 function stableHash(prefix: string, ...inputs: string[]): string {
   const hash = crypto.createHash("sha256");
   hash.update(prefix);
@@ -102,7 +141,10 @@ export function streamQoder(
   };
 
   (async () => {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    const secrets = [options?.apiKey || ""];
     try {
+      options?.signal?.throwIfAborted();
       const providerMode = model.provider === "qoder-cn" ? "cn" : getQoderMode();
       const accessToken = options?.apiKey;
       if (!accessToken) {
@@ -115,6 +157,7 @@ export function streamQoder(
 
       // Resolve user details from cached credentials
       const cachedCreds = getCachedCredentials(accessToken, model.provider);
+      secrets.push(cachedCreds?.access || "", cachedCreds?.refresh || "");
       const userID = cachedCreds?.userID || "qoder-user";
       const name = cachedCreds?.name || (isQoderCNMode(providerMode) ? "Qoder CN User" : "Qoder User");
       const email = cachedCreds?.email || getQoderUserEmailFallback(providerMode);
@@ -235,6 +278,7 @@ export function streamQoder(
         machineID,
       });
 
+      secrets.push(headers.Authorization, headers["Cosy-Key"], headers["Cosy-Machinetoken"]);
       const modelSource = modelConfig.source || "system";
 
       const response = await fetch(chatURL, {
@@ -257,7 +301,7 @@ export function streamQoder(
         throw new Error(`Qoder API request failed: ${response.status} ${response.statusText}. Response: ${errText}`);
       }
 
-      const reader = response.body?.getReader();
+      reader = response.body?.getReader();
       if (!reader) throw new Error("No response body");
       const decoder = new TextDecoder();
       let buffer = "";
@@ -271,8 +315,10 @@ export function streamQoder(
 
       stream.push({ type: "start", partial: output });
 
-      while (true) {
+      readLoop: while (true) {
+        options?.signal?.throwIfAborted();
         const { done, value } = await reader.read();
+        options?.signal?.throwIfAborted();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
@@ -287,20 +333,9 @@ export function streamQoder(
           if (!line.startsWith("data:")) continue;
 
           const dataStr = line.substring(5).trim();
-          if (dataStr === "[DONE]") {
-            break;
-          }
-
-          try {
-            const envelope = JSON.parse(dataStr);
-            if (envelope.statusCodeValue && envelope.statusCodeValue !== 200) {
-              throw new Error(`Upstream status ${envelope.statusCodeValue}: ${envelope.body}`);
-            }
-
-            const innerStr = envelope.body;
-            if (!innerStr || innerStr === "[DONE]") continue;
-
-            const inner = JSON.parse(innerStr);
+          const inner = parseSseEnvelope(dataStr);
+          if (inner === "[DONE]") break readLoop;
+          if (inner) {
             if (inner.choices && inner.choices.length > 0) {
               const choice = inner.choices[0];
               const delta = choice.delta;
@@ -392,10 +427,11 @@ export function streamQoder(
                 output.stopReason = choice.finish_reason;
               }
             }
-          } catch {}
+          }
         }
       }
 
+      options?.signal?.throwIfAborted();
       if (thinkingParser) {
         thinkingParser.finalize();
       }
@@ -442,11 +478,21 @@ export function streamQoder(
       stream.end();
     } catch (e: unknown) {
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-      output.errorMessage = e instanceof Error ? e.message : String(e);
+      output.errorMessage = redactError(e instanceof Error ? e.message : String(e), secrets);
       stream.push({ type: "error", reason: output.stopReason, error: output });
       try {
         stream.end();
       } catch {}
+    } finally {
+      if (reader) {
+        // DONE and business errors can arrive before the server closes the connection.
+        try {
+          await reader.cancel();
+        } catch {
+          // Cleanup must not replace the original error (including cancellation).
+        }
+        reader.releaseLock();
+      }
     }
   })();
 
