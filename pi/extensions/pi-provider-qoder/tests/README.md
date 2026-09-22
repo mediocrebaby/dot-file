@@ -14,5 +14,6 @@ node --import jiti/register --test tests/*.test.ts
 - `stream-errors.test.ts`：首帧/中途错误、数字/字符串状态码、JSON 容错、凭证脱敏、DONE/EOF 结束及用户取消。
 - `stream-usage.test.ts`：输入/输出/缓存/总量映射、usage-only 尾帧、重复及部分快照、零值和异常字段、错误/取消后的统计保留、跨请求隔离及不估算费用。
 - `stream-finish-reasons.test.ts`：结束原因映射、截断工具的优先级、未知/缺失原因回退以及 usage 尾帧兼容。
+- `stream-reasoning.test.ts`：解码实际请求体检查 effort、模型目录能力、未指定/不支持/off 场景，以及本地标签解析独立性。目录和响应均为模拟，不证明真实上游关闭推理有效。
 
-usage 的来源、字段取舍与真实验收缺口见 [映射决定](../.agents/notes/implemented/feature/2026-09-22-qoder-token-usage.md)。截断与工具执行的宿主契约依据见 [结束原因决定](../.agents/notes/implemented/bug-fix/2026-09-22-qoder-finish-reasons.md)。
+usage 的来源、字段取舍与真实验收缺口见 [映射决定](../.agents/notes/implemented/feature/2026-09-22-qoder-token-usage.md)。截断与工具执行的宿主契约依据见 [结束原因决定](../.agents/notes/implemented/bug-fix/2026-09-22-qoder-finish-reasons.md)。档位和 off 的边界见 [推理设置决定](../.agents/notes/implemented/feature/2026-09-22-qoder-reasoning-settings.md)。

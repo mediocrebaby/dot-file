@@ -133,6 +133,16 @@ older GLM/Kimi keys. Both advertise thinking efforts (`low`, `high`, `max`) and
 `thinking_config` even though its raw `is_reasoning` flag is false. Live catalog
 limits take precedence; the static output-token fallback is 32,768.
 
+## 推理设置
+
+显式 Pi 档位会写入 `parameters.reasoning_effort`：`minimal → low`，其他档位同名映射。仅接受模型缓存目录 `thinking_config.enabled.efforts` 明确声明的目标档位；不支持或缺少档位信息时在请求前报错，不静默降级。未指定则保留服务端默认，不主动发送目录默认档位。
+
+当前静态 GLM 5.3/Kimi K3 声明 low/high/max；其他模型只有 reasoning 标志时不足以确认 effort，请刷新模型目录或保留未指定。
+
+**关闭推理生成尚未验证。** Pi 0.87 会把 UI 的 off 传成 `undefined`，与未指定无法区分，所以 UI off 在此仍是服务端默认，不保证关闭推理。直接调用 `streamQoder()` 时传入类型外的 `reasoning: "off"` 或 `false` 会明确报错，不把它们猜测成某个上游值。
+
+直接调用者可用 `parseThinkingTags: false` 关闭正文 `<think>` 标签提取；该选项不影响上游推理生成，也不隐藏 API 的 `reasoning_content`。旧有用 off/false 关闭本地解析的调用应迁移到此选项。
+
 ## Usage
 
 Once logged in, select any Qoder model in pi:

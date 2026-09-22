@@ -5,7 +5,6 @@ import type {
   AssistantMessageEventStream,
   Context,
   Model,
-  SimpleStreamOptions,
   TextContent,
   ThinkingContent,
   ToolCall,
@@ -23,6 +22,7 @@ import {
 import { getCachedModelConfig } from "./models.ts";
 import { getCachedCredentials } from "./oauth.ts";
 import { qoderEncodeBody } from "./qoder-encoding.ts";
+import { resolveQoderReasoningEffort, type QoderStreamOptions } from "./reasoning.ts";
 import { ThinkingTagParser } from "./thinking-parser.ts";
 import { createQoderUsageUpdater } from "./token-usage.ts";
 import { transformMessagesForQoder, transformTools } from "./transform.ts";
@@ -138,7 +138,7 @@ function stableChatRecordID(
 export function streamQoder(
   model: Model<Api>,
   context: Context,
-  options?: SimpleStreamOptions,
+  options?: QoderStreamOptions,
 ): AssistantMessageEventStream {
   const StreamCtor = (PiAi as unknown as { AssistantMessageEventStream: new () => AssistantMessageEventStream })
     .AssistantMessageEventStream;
@@ -200,6 +200,7 @@ export function streamQoder(
       };
       modelConfig.key = qoderModel;
 
+      const reasoningEffort = resolveQoderReasoningEffort(modelConfig, options?.reasoning);
       const isReasoning = !!modelConfig.is_reasoning;
       const maxOutputTokens = modelConfig.max_output_tokens || 32768;
 
@@ -262,7 +263,10 @@ export function streamQoder(
         system: "",
         messages: normalizedMessages,
         tools: toolsRaw || [],
-        parameters: { max_tokens: maxTokens },
+        parameters: {
+          max_tokens: maxTokens,
+          ...(reasoningEffort === undefined ? {} : { reasoning_effort: reasoningEffort }),
+        },
         chat_context: {
           chatPrompt: "",
           imageUrls: null,
@@ -334,8 +338,7 @@ export function streamQoder(
       let thinkingBlockIndex = -1;
       const toolCallsState: ToolCallState[] = [];
 
-      const thinkingEnabled = (options?.reasoning as unknown) !== false && (options?.reasoning as unknown) !== "off";
-      const thinkingParser = thinkingEnabled ? new ThinkingTagParser(output, stream) : null;
+      const thinkingParser = options?.parseThinkingTags !== false ? new ThinkingTagParser(output, stream) : null;
 
       stream.push({ type: "start", partial: output });
 
