@@ -1,7 +1,6 @@
 ---
 name: improve-codebase-architecture
 description: 显式评估代码库架构痛点，按证据与收益给出改进候选；默认简洁报告，选定候选后再讨论设计，不自动重构。
-disable-model-invocation: true
 ---
 
 # Improve Codebase Architecture

@@ -1,7 +1,6 @@
 ---
 name: to-spec
 description: 将已确认讨论整理为可验收的 spec；优先沿用项目格式与本地交付，不重新完整访谈，外部发布另需授权。
-disable-model-invocation: true
 ---
 
 # 将讨论整理为规格

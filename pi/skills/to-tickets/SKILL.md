@@ -1,7 +1,6 @@
 ---
 name: to-tickets
 description: 显式将方案拆为带依赖和验收标准的票据；沿用已确认拆分，默认交付草稿，外部创建或修改须在授权范围内。
-disable-model-invocation: true
 ---
 
 # 将方案拆成可验收任务

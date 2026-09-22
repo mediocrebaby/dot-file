@@ -1,7 +1,6 @@
 ---
 name: grill-with-docs
 description: 显式调用的带文档访谈入口；同步已确认的术语和有长期价值的决定。
-disable-model-invocation: true
 ---
 
 1. 用 `read` 读取 [grilling](../grilling/SKILL.md) 和 [domain-modeling](../domain-modeling/SKILL.md)。
