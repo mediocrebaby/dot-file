@@ -61,6 +61,27 @@ function parseSseEnvelope(data: string): Record<string, any> | "[DONE]" | undefi
   return inner && typeof inner === "object" ? inner : undefined;
 }
 
+function mapFinishReason(reason: unknown): "stop" | "length" | "toolUse" | undefined {
+  switch (reason) {
+    case undefined:
+    case null:
+    case "":
+      return undefined;
+    case "stop":
+    case "end":
+      return "stop";
+    case "length":
+      return "length";
+    case "tool_calls":
+    case "function_call":
+      return "toolUse";
+    default:
+      // Includes content_filter/network_error. Never turn an unrecognized
+      // provider termination into a successful completion or an illegal enum.
+      throw new Error(`Qoder finish_reason: ${String(reason)}`);
+  }
+}
+
 function redactError(message: string, secrets: string[]): string {
   for (const secret of secrets.filter(Boolean).sort((a, b) => b.length - a.length)) {
     for (const form of [secret, encodeURIComponent(secret), JSON.stringify(secret).slice(1, -1)]) {
@@ -428,8 +449,11 @@ export function streamQoder(
                 }
               }
 
-              if (choice.finish_reason) {
-                output.stopReason = choice.finish_reason;
+              const finishReason = mapFinishReason(choice.finish_reason);
+              if (finishReason && output.stopReason !== "length") {
+                // Truncation must survive later stop/tool markers: Pi refuses
+                // to execute tools from length-limited assistant messages.
+                output.stopReason = finishReason;
               }
             }
           }
@@ -474,12 +498,13 @@ export function streamQoder(
         }
       }
 
-      if (toolCallsState.length > 0) {
-        output.stopReason = "toolUse";
-      } else {
-        output.stopReason = "stop";
-      }
-      stream.push({ type: "done", reason: output.stopReason as "stop" | "toolUse", message: output });
+      const reason = output.stopReason === "length"
+        ? "length"
+        : output.stopReason === "toolUse" || output.content.some((block) => block.type === "toolCall")
+          ? "toolUse"
+          : "stop";
+      output.stopReason = reason;
+      stream.push({ type: "done", reason, message: output });
       stream.end();
     } catch (e: unknown) {
       output.stopReason = options?.signal?.aborted ? "aborted" : "error";
