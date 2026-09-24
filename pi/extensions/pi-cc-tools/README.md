@@ -123,6 +123,10 @@ The selection is persisted as `spinnerVerbColor` / `spinnerStatusColor` in `~/.p
 
 A work run contains adjacent thinking and tool activity, including edit, write, and apply_patch calls. Assistant prose, user messages, and compaction notices end it. The first row is a narrative sentence followed by the action counts, so `Thought for 2s` and the `Think × 2` count describe different quantities: thinking reports its total duration while every other action reports its count. The second row reports how many tool calls succeeded and how many failed, followed by file-change statistics. Completed diffs stay summarized; `steps` and `full` reveal the individual operations and complete diffs. While work is active, the first row uses progressive phrasing such as `✻ Thinking, running 1 shell command`, and its leading marker cycles through the `✻ ✽ ✢ ✳ ✶` asterisk family shared with the status-line loader. The second row stays a single live row that shows the newest output of the most recent action, so a work block keeps one fixed height from start to finish and the transcript never jumps while work runs. Action names use stable semantic colors, while `×`, branch connectors, and separators stay dim. When the terminal is too narrow for the counts, the narrative is kept intact and the counts are dropped before anything is truncated. The work region reserves one blank line above and keeps the existing conversation spacing below; its rows remain continuous. `Ctrl+Shift+O` keeps controlling expanded output detail.
 
+### Keyboard-only display toggles
+
+Mouse clicks do not expand or collapse tool output or thinking blocks while this extension is enabled. This is fixed behavior, with no configuration switch. Use `Ctrl+O` for tool detail levels, `Ctrl+Shift+O` for extra output detail, and `Ctrl+T` for thinking visibility (or your configured keybindings). Streaming and automatic display updates are unchanged. The extension does not globally block mouse input, scrolling, or text selection.
+
 ### Tool background modes
 
 | Value | Behavior |

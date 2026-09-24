@@ -5,6 +5,10 @@
 
 ## 1.0.84 — unreleased
 
+### Changed
+
+- **Keyboard-only display toggles** — mouse clicks no longer expand or collapse tool output or thinking blocks. Keyboard shortcuts and automatic streaming updates remain available; unrelated mouse handling is preserved. This behavior is fixed, with no configuration toggle.
+
 ### Added
 
 - **Three `Ctrl+O` detail levels** — `Ctrl+O` cycles `steps` (one row per tool, the previous behavior) → `full` (complete output) → `compressed`. The compressed level folds adjacent thinking and tool activity into a two-row work block: a narrative first row such as `● Thought for 2s, listed 1 directory, ran 1 shell command   Think × 2   List × 1   Bash × 1`, and a success/failure row such as `└ 2 done   ctrl+o for details`.

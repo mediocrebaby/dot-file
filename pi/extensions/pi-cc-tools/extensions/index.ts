@@ -42,6 +42,7 @@ import {
 	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 
+import { patchDisplayToggleMouse } from "./mouse";
 import * as Diff from "diff";
 import type { BundledLanguage, BundledTheme } from "shiki";
 
@@ -7047,6 +7048,7 @@ export default function (pi: ExtensionAPI) {
 	patchCustomMessageRender();
 	patchUserMessageRender();
 	patchAssistantMessages();
+	patchDisplayToggleMouse(AssistantMessageComponent.prototype, ToolExecutionComponent.prototype);
 	patchToolExecutionRenderers();
 	applyDiffPalette();
 	registerThinkingLabels(pi);
