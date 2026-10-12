@@ -1,6 +1,7 @@
 import { basename, extname } from "node:path";
 
 import {
+	getPowerShellConfig,
 	getShellConfig,
 	type ExtensionAPI,
 } from "@earendil-works/pi-coding-agent";
@@ -35,7 +36,10 @@ function detectOperatingSystem(): string {
 
 function detectShell(): string {
 	try {
-		const shellPath = getShellConfig().shell;
+		const shellConfig = process.platform === "win32"
+			? getPowerShellConfig()
+			: getShellConfig();
+		const shellPath = shellConfig.shell;
 		const shellFileName = basename(shellPath);
 		const shellName = basename(shellFileName, extname(shellFileName));
 
@@ -53,6 +57,12 @@ export default function piEnvironment(pi: ExtensionAPI): void {
 		`${OPERATING_SYSTEM_FIELD} ${detectOperatingSystem()}`,
 		`${SHELL_FIELD} ${detectShell()}`,
 	].join(PROMPT_LINE_SEPARATOR);
+
+	// Publish after all extensions are loaded, including on session switches.
+	// The viewer needs this prefix even when no agent run is active.
+	pi.on("session_start", () => {
+		pi.events.emit("environment:prompt", environmentPrompt);
+	});
 
 	pi.on(BEFORE_AGENT_START_EVENT, event => ({
 		systemPrompt: `${environmentPrompt}${PROMPT_SECTION_SEPARATOR}${event.systemPrompt}`,

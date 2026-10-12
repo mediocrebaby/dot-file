@@ -12,12 +12,22 @@ export default function (pi: ExtensionAPI) {
     todayDate = data;
   });
 
+  // Like pi-today, pi-environment publishes its prefix for idle-time display.
+  let environmentPrompt: string | undefined;
+  pi.events.on("environment:prompt", (data: string) => {
+    environmentPrompt = data;
+  });
+
   pi.registerCommand("system-prompt", {
     description: "Show the current system prompt and tool definitions",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();
 
       let prompt = ctx.getSystemPrompt();
+
+      if (environmentPrompt && !prompt.includes(environmentPrompt)) {
+        prompt = `${environmentPrompt}\n\n${prompt}`;
+      }
 
       // Prepend the date from pi-today if available
       if (todayDate) {
