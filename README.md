@@ -65,9 +65,9 @@ cd pi/extensions/filechanges && npm install
 cd ../web-fetch && npm install
 ```
 
-其余扩展（`pi-notify`、`pi-provider-qoder`、`pi-system-prompt`、`prompt-history`、`web-search`）纯 TypeScript，无外部依赖，链接完就能用。
+其余扩展（`pi-notify`、`pi-system-prompt`、`prompt-history`、`web-search`）纯 TypeScript，无外部依赖，链接完就能用。
 
-完成后在 pi 中执行 `/reload`（或重启会话）生效。Qoder provider 首次使用需运行 `/login qoder`（全球）或 `/login qoder-cn`（国内）；详见 `pi/extensions/pi-provider-qoder/README.md`。
+完成后在 pi 中执行 `/reload`（或重启会话）生效。
 
 ### 3. 链接 pi 技能目录
 
