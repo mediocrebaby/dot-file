@@ -1,0 +1,19 @@
+{
+  "name": "gpt-with-taste-pi",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "pi": {
+    "extensions": [
+      "./index.js"
+    ]
+  },
+  "exports": {
+    ".": "./index.js",
+    "./integration": "./runtime.mjs"
+  }
+}
