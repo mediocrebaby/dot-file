@@ -97,7 +97,7 @@ CMD（管理员）：
 mklink /D "%USERPROFILE%\.pi\agent\skills" "\path\to\dot-file\pi\skills"
 ```
 
-技能目录会被 pi 自动扫描，按 `SKILL.md` 中的 `description` 匹配任务时自动加载，或由用户显式触发（如 `/grill-me`、`/handoff`）。
+技能目录会被 pi 自动扫描，按 `SKILL.md` 中的 `description` 匹配任务时自动加载，或由用户显式触发（如 `$committing-changes`）。
 
 ### 4. 链接 Neovim 配置
 
