@@ -3,6 +3,13 @@ export const SECTION = 'gpt_with_taste';
 export const STEER_TYPE = 'gpt-with-taste:steer';
 export const block = (texts, role) => `<gpt-with-taste>\n${texts[role].trim()}\n</gpt-with-taste>`;
 
+export function previewPrompt(prompt, texts, {role, active}) {
+  // Replace our previous request's section; leave other extensions' text intact.
+  const withoutTaste = prompt.replace(/(?:\r?\n\r?\n)?^<gpt-with-taste>\r?\n[\s\S]*?\r?\n<\/gpt-with-taste>(?=\r?\n|$)/gm, '');
+  const clean = prompt.startsWith('<gpt-with-taste>') ? withoutTaste.replace(/^\r?\n(?:\r?\n)?/, '') : withoutTaste;
+  return active ? `${clean}${clean ? '\n\n' : ''}${block(texts, role)}` : clean;
+}
+
 export function projectMessages(input, texts, {role, active, steering, completedResultTypes}) {
   const messages = input.filter(message =>
     !(message.role === 'custom' && message.customType === STEER_TYPE)).map(message => {

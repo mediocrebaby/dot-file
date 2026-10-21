@@ -1,6 +1,6 @@
 // Pi transport adapted from SpadeLushen/pi-gpt-with-taste (MIT).
 import {readFileSync} from 'node:fs';
-import {block, projectMessages} from './projection.mjs';
+import {block, previewPrompt, projectMessages} from './projection.mjs';
 import {ensurePayloadInstructions} from './payload.mjs';
 
 const registrations = new WeakSet();
@@ -33,6 +33,9 @@ export function createTasteExtension({role = 'main', providers = ['openai', 'ope
       modelIdPattern.lastIndex = 0;
       return {role, active, steering: state.steering !== false, completedResultTypes: completed};
     };
+    pi.events.on('system-prompt:preview', preview => {
+      preview.prompt = previewPrompt(preview.prompt, texts, decision(preview.context));
+    });
     let warned = false;
     pi.on('context_with_system', (event, ctx) => ({messages: projectMessages(event.messages, texts, decision(ctx))}));
     pi.on('before_provider_request', (event, ctx) => {

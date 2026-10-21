@@ -1,9 +1,15 @@
 /**
- * /system-prompt — Display the full system prompt and tool definitions
+ * /system-prompt — Preview the system prompt and current tool definitions
  * in a full-screen scrollable overlay.
  */
-import type { ExtensionAPI, Theme, ToolDefinition } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, Theme, ToolDefinition } from "@mariozechner/pi-coding-agent";
 import { matchesKey, visibleWidth, wrapTextWithAnsi } from "@mariozechner/pi-tui";
+
+/** Synchronous display-only transforms, applied in event-listener order. */
+export interface SystemPromptPreview {
+  context: ExtensionCommandContext;
+  prompt: string;
+}
 
 export default function (pi: ExtensionAPI) {
   // Listen for date from pi-today extension
@@ -19,7 +25,7 @@ export default function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("system-prompt", {
-    description: "Show the current system prompt and tool definitions",
+    description: "Preview the system prompt and current tool definitions",
     handler: async (_args, ctx) => {
       await ctx.waitForIdle();
 
@@ -33,6 +39,10 @@ export default function (pi: ExtensionAPI) {
       if (todayDate) {
         prompt = `${todayDate}\n\n${prompt}`;
       }
+
+      const preview: SystemPromptPreview = { context: ctx, prompt };
+      pi.events.emit("system-prompt:preview", preview);
+      prompt = preview.prompt;
 
       const promptLines = prompt.split("\n");
       const charCount = prompt.length;
@@ -318,7 +328,7 @@ class SystemPromptView {
     out.push(th.fg("border", `╭${"─".repeat(innerW)}╮`));
     out.push(
       row(
-        ` ${th.fg("accent", th.bold("System Prompt"))}  ${th.fg("dim", `— ${this.promptLineCount} lines, ${this.promptCharCount.toLocaleString()} chars`)}  ${th.fg("dim", `|  ${this.allTools.length} tools`)}`,
+        ` ${th.fg("accent", th.bold("System Prompt Preview"))}  ${th.fg("dim", `— ${this.promptLineCount} lines, ${this.promptCharCount.toLocaleString()} chars`)}  ${th.fg("dim", `|  ${this.allTools.length} tools`)}`,
       ),
     );
     out.push(row(""));
