@@ -20,3 +20,7 @@ blocked_by: []
 HTTPS 自定义端点必须通过严格的公网 IPv4/IPv6 DNS 校验，并由 Node transport 固定连接到已校验地址，避免请求阶段重新解析造成 DNS rebinding；明文 HTTP 只允许规范四段 `127.0.0.0/8` 或 `::1` literal loopback，用于本机 CLIProxyAPI。拒绝 userinfo、query、fragment、端口 0、路径穿越和编码分隔符；Responses 请求使用 `redirect: "manual"`，任何 3xx 都作为不回退的安全错误。
 
 Provider endpoint 不继承 `ssrf.allowRanges` 或 `ssrf.trustEnvProxy`。额外头仅允许 `OpenAI-Organization`、`OpenAI-Project`、`X-OpenAI-Actor-Authorization`，禁止覆盖 Authorization、Cookie、Host、转发和 hop-by-hop 语义。错误正文有长度上限并按 API Key/受控头值脱敏。
+
+### 后续决策 — 默认兼容 Fake-IP 域名解析
+
+[ADR 0001](../../../../../../../docs/adr/0001-default-fake-ip-compatibility.md) 调整了上述“HTTPS 仅允许严格公网 DNS 结果”的限制：OpenAI 搜索与内容抓取统一默认接受域名解析到 `198.18.0.0/15`，无需配置开关。例外不作用于直接 IP URL 或 IPv4-mapped IPv6，其他禁止地址、TLS 校验、OpenAI 连接地址固定、禁止重定向以及通用 SSRF 配置隔离保持不变。该范围作为受信网络转发池处理，不代表插件检测或证明了 TUN 代理存在。

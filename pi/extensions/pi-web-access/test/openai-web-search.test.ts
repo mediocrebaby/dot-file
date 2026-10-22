@@ -92,6 +92,11 @@ test("rejects non-literal loopback HTTP endpoints and unsafe URL parts", async (
 		"http://192.168.1.5:8317/v1",
 		"https://127.0.0.1:8317/v1",
 		"https://[::1]:8317/v1",
+		"http://gateway.example/v1",
+		"http://198.18.0.64/v1",
+		"https://198.18.0.64/v1",
+		"https://198.19.255.255/v1",
+		"https://[::ffff:198.18.0.64]/v1",
 		"https://user:secret@example.com/v1",
 		"https://example.com/v1?target=other",
 		"https://example.com/v1#fragment",
@@ -104,7 +109,7 @@ test("rejects non-literal loopback HTTP endpoints and unsafe URL parts", async (
 });
 
 test("validates public HTTPS endpoint DNS without inheriting SSRF allow-range bypasses", async () => {
-	for (const address of ["10.0.0.8", "ff02::1", "64:ff9b:1::1", "2001:2::1", "2001:db8::1", "3fff::1", "4000::1", "5f00::1", "fec0::1"]) {
+	for (const address of ["10.0.0.8", "127.0.0.1", "169.254.169.254", "192.168.1.1", "198.51.100.1", "::ffff:198.18.0.64", "ff02::1", "64:ff9b:1::1", "2001:2::1", "2001:db8::1", "3fff::1", "4000::1", "5f00::1", "fec0::1"]) {
 		await assert.rejects(
 			resolveOpenAIResponsesEndpoint("https://gateway.example/v1", {
 				lookup: async () => [{ address, family: address.includes(":") ? 6 : 4 }],
@@ -125,6 +130,78 @@ test("validates public HTTPS endpoint DNS without inheriting SSRF allow-range by
 		lookup: async () => [{ address: "93.184.216.34", family: 4 }],
 	});
 	assert.equal(endpoint.toString(), "https://gateway.example/v1/responses");
+});
+
+test("accepts fake-IP DNS results by default and pins the validated address without changing the hostname", async () => {
+	for (const address of ["198.18.0.0", "198.18.0.64", "198.19.255.255"]) {
+		let validated: Array<{ address: string; family: number }> = [];
+		const endpoint = await resolveOpenAIResponsesEndpoint("https://gateway.example/v1", {
+			lookup: async () => [{ address, family: 4 }],
+			onValidatedAddresses: addresses => { validated = addresses; },
+		});
+		assert.equal(endpoint.toString(), "https://gateway.example/v1/responses");
+		assert.deepEqual(validated, [{ address, family: 4 }]);
+		const lookup = createPinnedLookup(validated[0]);
+		const pinned = await new Promise<string>((resolve, reject) => {
+			lookup("gateway.example", { all: false }, (error, value) => {
+				if (error) reject(error);
+				else resolve(value as string);
+			});
+		});
+		assert.equal(pinned, address);
+	}
+});
+
+test("searches through a fake-IP gateway without configuration and preserves the HTTPS request contract", async () => {
+	let fetchCalls = 0;
+	const response = await searchWithOpenAI("query", {}, {
+		config: { webSearch: { openai: { baseUrl: "https://gateway.example/v1", apiKey: "fixture-key" } } },
+		environment: {},
+		lookup: async () => [{ address: "198.18.0.64", family: 4 }],
+		fetch: async (input, init) => {
+			fetchCalls++;
+			assert.equal(String(input), "https://gateway.example/v1/responses");
+			assert.equal(init?.redirect, "manual");
+			assert.equal((init?.headers as Record<string, string>).authorization, "Bearer fixture-key");
+			return new Response(JSON.stringify({
+				output: [{ type: "web_search_call", action: { sources: [{ url: "https://example.com/source" }] } }],
+			}));
+		},
+	});
+	assert.equal(fetchCalls, 1);
+	assert.equal(response.results[0]?.url, "https://example.com/source");
+});
+
+test("rejects mixed fake-IP and private DNS results before sending credentials and still refuses redirects", async () => {
+	let fetchCalls = 0;
+	for (const addresses of [
+		[{ address: "198.18.0.64", family: 4 }, { address: "10.0.0.8", family: 4 }],
+		[{ address: "10.0.0.8", family: 4 }, { address: "198.18.0.64", family: 4 }],
+	]) {
+		await assert.rejects(searchWithOpenAI("query", {}, {
+			config: { webSearch: { openai: { baseUrl: "https://gateway.example/v1", apiKey: "fixture-key" } } },
+			environment: {},
+			lookup: async () => addresses,
+			fetch: async () => { fetchCalls++; return new Response("{}"); },
+		}), (error: unknown) => {
+			const value = error as { category?: unknown; fallbackEligible?: unknown };
+			return value.category === "security" && value.fallbackEligible === false;
+		});
+	}
+	assert.equal(fetchCalls, 0);
+	await assert.rejects(searchWithOpenAI("query", {}, {
+		config: { webSearch: { openai: { baseUrl: "https://gateway.example/v1", apiKey: "fixture-key" } } },
+		environment: {},
+		lookup: async () => [{ address: "198.18.0.64", family: 4 }],
+		fetch: async () => {
+			fetchCalls++;
+			return new Response(null, { status: 302, headers: { location: "https://other.example/v1" } });
+		},
+	}), (error: unknown) => {
+		const value = error as { category?: unknown; fallbackEligible?: unknown };
+		return value.category === "security" && value.fallbackEligible === false;
+	});
+	assert.equal(fetchCalls, 1);
 });
 
 test("pinned HTTPS lookup supports both single-address and all-address Node modes", async () => {

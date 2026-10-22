@@ -110,7 +110,7 @@ interface WebSearchConfig {
 		activity?: KeyId;
 	};
 	ssrf?: {
-		/** CIDR ranges exempted from the SSRF guard (e.g. fake-IP proxy ranges). */
+		/** Additional content-fetch CIDR exemptions; the standard fake-IP DNS pool works by default. */
 		allowRanges?: string[];
 		/** Skip local hostname DNS preflight when an HTTP(S)_PROXY env var applies. */
 		trustEnvProxy?: boolean;

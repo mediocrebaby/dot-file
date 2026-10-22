@@ -130,9 +130,9 @@ interface ValidationOptions {
 	/** Optional hostname policy for fetch_content target URLs. */
 	domainPolicy?: DomainPolicy;
 	/**
-	 * CIDR ranges (e.g. "198.18.0.0/15") to exempt from the SSRF guard.
-	 * Useful when a host runs a TUN/fake-IP proxy (Surge, Clash, Mihomo, ...)
-	 * that resolves public domains into a reserved range. Entries are validated
+	 * Additional CIDR ranges to exempt from the SSRF guard, for example a
+	 * nonstandard proxy address pool. Hostname DNS results in 198.18.0.0/15
+	 * are already supported without configuration. Entries are validated
 	 * strictly; an invalid entry throws so misconfiguration is not silent.
 	 */
 	allowRanges?: string[];
@@ -192,6 +192,8 @@ export async function validateRemoteUrl(rawUrl: string | URL, options: Validatio
 
 	if (addresses.length === 0) throw new Error(`Failed to resolve ${hostname}: no addresses returned`);
 	for (const { address } of addresses) {
+		// Only DNS results get the default fake-IP exception, never literal URL hosts.
+		if (isFakeIpProxyAddress(address)) continue;
 		assertPublicAddress(address, hostname, allowRanges);
 	}
 	return url;
@@ -310,21 +312,19 @@ function assertPublicAddress(address: string, hostname: string, allowRanges: Par
 	const normalized = normalizeHostname(address);
 	const ipVersion = net.isIP(normalized);
 	if (ipVersion === 0) throw new Error(`Resolved non-IP address for ${hostname}: ${address}`);
-	// Explicitly-allowed ranges bypass the private/reserved checks below. This lets
-	// users exempt synthetic ranges produced by TUN/fake-IP proxies (e.g. 198.18/15).
+	// Preserve explicit exemptions for custom ranges, including literal URL hosts.
 	if (isInAllowedRange(normalized, ipVersion, allowRanges)) return;
 	if (ipVersion === 4 && isBlockedIPv4(normalized)) {
-		const hint = isFakeIpProxyAddress(normalized)
-			? '. This address is in 198.18.0.0/15, commonly used by TUN/fake-IP proxies. If that matches your setup, configure ssrf.allowRanges with ["198.18.0.0/15"] in web-search.json.'
-			: "";
-		throw new Error(`Blocked internal address for ${hostname}: ${normalized}${hint}`);
+		throw new Error(`Blocked internal address for ${hostname}: ${normalized}`);
 	}
 	if (ipVersion === 6 && isBlockedIPv6(normalized)) {
 		throw new Error(`Blocked internal address for ${hostname}: ${normalized}`);
 	}
 }
 
-function isFakeIpProxyAddress(address: string): boolean {
+/** Recognizes only the IPv4 fake-IP pool; mapped IPv6 and malformed IPs are not exempt. */
+export function isFakeIpProxyAddress(address: string): boolean {
+	if (net.isIP(address) !== 4) return false;
 	const [a, b] = address.split(".").map(part => Number(part));
 	return a === 198 && (b === 18 || b === 19);
 }

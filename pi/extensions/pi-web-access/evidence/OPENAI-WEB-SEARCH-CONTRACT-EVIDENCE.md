@@ -36,6 +36,6 @@ The probe covers:
 - client cancellation;
 - event, source, citation, and error shapes for each configured model.
 
-The harness pins every request to the DNS address validated before credentials are sent, records the target version and non-streaming Responses wire API, and refuses secret-bearing output. If every baseline model does not return a successful response with complete sources, the run is marked `inconclusive` and exits non-zero; it cannot close the live contract ticket.
+The harness follows the extension's default hostname-only `198.18.0.0/15` fake-IP exception; literal IP endpoints in that range and other blocked addresses are still rejected. It pins every request to the DNS address validated before credentials are sent, records the target version and non-streaming Responses wire API, and refuses secret-bearing output. If every baseline model does not return a successful response with complete sources, the run is marked `inconclusive` and exits non-zero; it cannot close the live contract ticket.
 
 A successful result applies only to the exact endpoint deployment and models recorded in the generated evidence. It must not be generalized to every CLIProxyAPI version, translator, upstream provider, or model alias.

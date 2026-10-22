@@ -17,7 +17,7 @@ import {
 	normalizeSearchResultCount,
 	type NormalizedSearchDomainFilters,
 } from "./search-options.ts";
-import type { Lookup, LookupAddress } from "./ssrf-protection.ts";
+import { isFakeIpProxyAddress, type Lookup, type LookupAddress } from "./ssrf-protection.ts";
 import { getWebSearchConfigPath } from "./utils.ts";
 
 export type OpenAIWebSearchFailureCategory =
@@ -140,7 +140,11 @@ async function resolveOpenAIHttpsAddresses(hostname: string, lookup: Lookup | un
 	if (addresses.length === 0) {
 		throw new OpenAIWebSearchError("network", `OpenAI Web Search failed to resolve ${hostname}: no addresses returned`, { fallbackEligible: true });
 	}
-	return addresses.map(({ address }) => assertOpenAIPublicAddress(address, hostname));
+	// DNS-only fake-IP compatibility shares the content-fetch policy. Literal IP
+	// endpoints still pass through the strict public-address check above.
+	return addresses.map(({ address }) => isFakeIpProxyAddress(address)
+		? { address, family: 4 }
+		: assertOpenAIPublicAddress(address, hostname));
 }
 
 function isLiteralLoopback(hostname: string): boolean {

@@ -66,6 +66,11 @@ function blockedIPv6(address) {
   return !Number.isFinite(firstHextet) || firstHextet < 0x2000 || firstHextet > 0x3fff || blockedProbeEndpoints.check(address, "ipv6");
 }
 
+// Match the extension's DNS-only default fake-IP exception, not literal IP URLs.
+function isFakeIpProxyAddress(address) {
+  return net.isIP(address) === 4 && /^198\.(?:18|19)\./.test(address);
+}
+
 function assertPublicAddress(address, hostname) {
   const family = net.isIP(address);
   if (family === 4 && blockedIPv4(address)) throw new Error(`Probe endpoint resolves to a blocked IPv4 address: ${hostname}`);
@@ -99,7 +104,9 @@ async function endpointFor(rawBaseUrl) {
     } else {
       const addresses = await dnsLookup(hostname, { all: true, verbatim: true });
       if (addresses.length === 0) throw new Error(`Probe endpoint returned no DNS addresses: ${hostname}`);
-      const validated = addresses.map(({ address }) => assertPublicAddress(address, hostname));
+      const validated = addresses.map(({ address }) => isFakeIpProxyAddress(address)
+        ? { address, family: 4 }
+        : assertPublicAddress(address, hostname));
       validatedAddress = validated[0];
     }
   } else {
